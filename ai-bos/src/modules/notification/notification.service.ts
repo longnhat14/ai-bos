@@ -42,6 +42,12 @@ export class NotificationService {
         );
         break;
 
+      case EventType.ORDER_CREATED:
+        this.logger.log(
+          `[Notification] Don hang moi: ${job.data.orderNumber}, tong tien: ${job.data.totalAmount}`,
+        );
+        break;
+
       default:
         // Event khac chua can xu ly thong bao, bo qua
         break;

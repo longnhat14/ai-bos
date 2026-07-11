@@ -29,7 +29,11 @@ export enum EventType {
   WARRANTY_EXPIRING = 'warranty.expiring',
   WARRANTY_VOIDED = 'warranty.voided',
 
-  // (Se bo sung tiep: order.created cho Shop...)
+  // Shop (Sprint 8)
+  ORDER_CREATED = 'order.created',
+  ORDER_CONFIRMED = 'order.confirmed',
+  ORDER_COMPLETED = 'order.completed',
+  ORDER_CANCELLED = 'order.cancelled',
 }
 
 export interface BaseEventPayload {

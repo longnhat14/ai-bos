@@ -10,6 +10,8 @@ import { InventoryItem } from '../modules/warehouse/inventory-item.entity';
 import { TicketPart } from '../modules/warehouse/ticket-part.entity';
 import { Invoice } from '../modules/invoice/invoice.entity';
 import { Warranty } from '../modules/warranty/warranty.entity';
+import { Order } from '../modules/shop/order.entity';
+import { OrderItem } from '../modules/shop/order-item.entity';
 import { EventLog } from '../common/event-bus/event-log.entity';
 
 dotenv.config();
@@ -31,6 +33,8 @@ export const AppDataSource = new DataSource({
     TicketPart,
     Invoice,
     Warranty,
+    Order,
+    OrderItem,
     EventLog,
   ],
   migrations: ['src/database/migrations/*.ts'],

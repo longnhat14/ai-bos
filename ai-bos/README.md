@@ -1,4 +1,4 @@
-# AI BOS Backend – Sprint 1-2: Platform Core + Ticket + CRM + Kho + Invoice + Warranty
+# AI BOS Backend – Sprint 1-2 HOÀN CHỈNH: Platform Core + 7 Business Modules
 
 Đây là khung code cho **Tuần 1 + Tuần 2** trong kế hoạch 4 tuần của AI BOS:
 Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
@@ -133,6 +133,42 @@ curl http://localhost:3000/api/v1/warranty/by-ticket/TICKET_ID -H "Authorization
 curl http://localhost:3000/api/v1/warranty/check/TICKET_ID -H "Authorization: Bearer TOKEN"
 ```
 Trả về `isActive: true`, `daysRemaining: ~90`.
+
+### Test Shop (bán hàng trực tiếp, dùng chung kho với Warehouse)
+
+**Tạo đơn hàng** (dùng lại `ITEM_ID` linh kiện đã tạo ở phần Kho, và `CUSTOMER_ID` đã có):
+```bash
+curl -X POST http://localhost:3000/api/v1/shop/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer TOKEN" \
+  -d '{"customerId":"CUSTOMER_ID","items":[{"inventoryItemId":"ITEM_ID","quantity":2}]}'
+```
+
+Kiểm tra tồn kho đã trừ **ngay lập tức** (khác với Ticket - Shop trừ kho ngay khi đặt hàng, không đợi xác nhận):
+```bash
+curl http://localhost:3000/api/v1/warehouse/items/ITEM_ID -H "Authorization: Bearer TOKEN"
+```
+
+**Test hoàn kho khi hủy đơn** (thay `ORDER_ID`):
+```bash
+curl -X PATCH http://localhost:3000/api/v1/shop/orders/ORDER_ID/status \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer TOKEN" \
+  -d '{"status":"cancelled"}'
+```
+Kiểm tra lại tồn kho — phải **cộng lại đúng số lượng** đã trừ trước đó.
+
+### Test Dashboard (tổng hợp số liệu từ tất cả module trên)
+
+```bash
+curl http://localhost:3000/api/v1/dashboard/overview -H "Authorization: Bearer TOKEN"
+```
+Trả về: số ticket đang mở, số ticket đóng hôm nay, số linh kiện sắp hết hàng, số đơn hàng đang chờ, doanh thu hôm nay/tháng này (tính từ Invoice đã tạo).
+
+```bash
+curl http://localhost:3000/api/v1/dashboard/technician-workload -H "Authorization: Bearer TOKEN"
+```
+Trả về danh sách kỹ thuật viên kèm số ticket đang xử lý — dữ liệu này sẽ được **AI Dispatcher (Sprint 9)** dùng để biết ai đang rảnh/bận khi đề xuất giao việc.
 
 ## 4. Cấu trúc thư mục
 

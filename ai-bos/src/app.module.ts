@@ -12,6 +12,8 @@ import { InventoryItem } from './modules/warehouse/inventory-item.entity';
 import { TicketPart } from './modules/warehouse/ticket-part.entity';
 import { Invoice } from './modules/invoice/invoice.entity';
 import { Warranty } from './modules/warranty/warranty.entity';
+import { Order } from './modules/shop/order.entity';
+import { OrderItem } from './modules/shop/order-item.entity';
 import { EventLog } from './common/event-bus/event-log.entity';
 
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -21,6 +23,8 @@ import { TicketsModule } from './modules/tickets/tickets.module';
 import { WarehouseModule } from './modules/warehouse/warehouse.module';
 import { InvoiceModule } from './modules/invoice/invoice.module';
 import { WarrantyModule } from './modules/warranty/warranty.module';
+import { ShopModule } from './modules/shop/shop.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
 import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.processor';
@@ -49,6 +53,8 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
           TicketPart,
           Invoice,
           Warranty,
+          Order,
+          OrderItem,
           EventLog,
         ],
         synchronize: config.get('NODE_ENV') === 'development', // CHI true khi dev, production dung migration
@@ -74,6 +80,8 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     WarehouseModule,
     InvoiceModule,
     WarrantyModule,
+    ShopModule,
+    DashboardModule,
     NotificationModule,
     EventBusModule,
   ],
