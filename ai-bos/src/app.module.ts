@@ -8,6 +8,7 @@ import { User } from './modules/users/user.entity';
 import { Customer } from './modules/customers/customer.entity';
 import { Ticket } from './modules/tickets/ticket.entity';
 import { TicketStatusHistory } from './modules/tickets/ticket-status-history.entity';
+import { TicketAttachment } from './modules/tickets/ticket-attachment.entity';
 import { InventoryItem } from './modules/warehouse/inventory-item.entity';
 import { TicketPart } from './modules/warehouse/ticket-part.entity';
 import { Invoice } from './modules/invoice/invoice.entity';
@@ -17,6 +18,9 @@ import { OrderItem } from './modules/shop/order-item.entity';
 import { Conversation } from './modules/chat/conversation.entity';
 import { ChatMessage } from './modules/chat/chat-message.entity';
 import { PriceCatalog } from './modules/pricing/price-catalog.entity';
+import { KnowledgeEntry } from './modules/knowledge/knowledge-entry.entity';
+import { DiagnosticCache } from './modules/diagnostic/diagnostic-cache.entity';
+import { AddOnRule } from './modules/sales/add-on-rule.entity';
 import { EventLog } from './common/event-bus/event-log.entity';
 
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -33,6 +37,8 @@ import { ChatModule } from './modules/chat/chat.module';
 import { DispatcherModule } from './modules/dispatcher/dispatcher.module';
 import { PricingModule } from './modules/pricing/pricing.module';
 import { DiagnosticModule } from './modules/diagnostic/diagnostic.module';
+import { KnowledgeModule } from './modules/knowledge/knowledge.module';
+import { SalesModule } from './modules/sales/sales.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ChannelsModule } from './common/channels/channels.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
@@ -58,6 +64,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
           Customer,
           Ticket,
           TicketStatusHistory,
+          TicketAttachment,
           InventoryItem,
           TicketPart,
           Invoice,
@@ -67,6 +74,9 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
           Conversation,
           ChatMessage,
           PriceCatalog,
+          KnowledgeEntry,
+          DiagnosticCache,
+          AddOnRule,
           EventLog,
         ],
         synchronize: config.get('NODE_ENV') === 'development', // CHI true khi dev, production dung migration
@@ -99,6 +109,8 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     DispatcherModule,
     PricingModule,
     DiagnosticModule,
+    KnowledgeModule,
+    SalesModule,
     NotificationModule,
     ChannelsModule,
     EventBusModule,

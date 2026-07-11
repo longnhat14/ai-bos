@@ -6,6 +6,7 @@ import { User } from '../modules/users/user.entity';
 import { Customer } from '../modules/customers/customer.entity';
 import { Ticket } from '../modules/tickets/ticket.entity';
 import { TicketStatusHistory } from '../modules/tickets/ticket-status-history.entity';
+import { TicketAttachment } from '../modules/tickets/ticket-attachment.entity';
 import { InventoryItem } from '../modules/warehouse/inventory-item.entity';
 import { TicketPart } from '../modules/warehouse/ticket-part.entity';
 import { Invoice } from '../modules/invoice/invoice.entity';
@@ -15,6 +16,9 @@ import { OrderItem } from '../modules/shop/order-item.entity';
 import { Conversation } from '../modules/chat/conversation.entity';
 import { ChatMessage } from '../modules/chat/chat-message.entity';
 import { PriceCatalog } from '../modules/pricing/price-catalog.entity';
+import { KnowledgeEntry } from '../modules/knowledge/knowledge-entry.entity';
+import { DiagnosticCache } from '../modules/diagnostic/diagnostic-cache.entity';
+import { AddOnRule } from '../modules/sales/add-on-rule.entity';
 import { EventLog } from '../common/event-bus/event-log.entity';
 
 dotenv.config();
@@ -32,6 +36,7 @@ export const AppDataSource = new DataSource({
     Customer,
     Ticket,
     TicketStatusHistory,
+    TicketAttachment,
     InventoryItem,
     TicketPart,
     Invoice,
@@ -41,6 +46,9 @@ export const AppDataSource = new DataSource({
     Conversation,
     ChatMessage,
     PriceCatalog,
+    KnowledgeEntry,
+    DiagnosticCache,
+    AddOnRule,
     EventLog,
   ],
   migrations: ['src/database/migrations/*.ts'],

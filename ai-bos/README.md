@@ -1,4 +1,4 @@
-# AI BOS Backend – Sprint 1-2 + Chat Auto-Translate + AI Dispatcher + AI Pricing + AI Diagnostic
+# AI BOS Backend – HOÀN CHỈNH Tuần 1-3: Platform Core + 7 Business Modules + 5 AI Engine + Upload ảnh/Vision
 
 Đây là khung code cho **Tuần 1 + Tuần 2** trong kế hoạch 4 tuần của AI BOS:
 Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
@@ -364,7 +364,109 @@ curl http://localhost:3000/api/v1/diagnostic/TICKET_ID -H "Authorization: Bearer
 
 Kết quả mong đợi: `probableCauses` là mảng gồm vài nguyên nhân (vd RAM lỗi tiếp xúc, mainboard lỗi...) kèm `probability` (tổng ~100) và `suggestedAction`, cùng `recommendedPartsToPrepare` gợi ý linh kiện nên mang theo.
 
-**Lưu ý quan trọng:** đây chỉ là **gợi ý xác suất để kỹ thuật viên chuẩn bị trước linh kiện**, không phải kết luận chẩn đoán cuối cùng — trường `note` trong response luôn nhắc lại điều này. Độ chính xác sẽ **tăng dần** khi triển khai AI Knowledge (Sprint tiếp theo) — lúc đó AI sẽ tham chiếu SOP/lịch sử sửa chữa thật của PCTech thay vì chỉ dùng kiến thức chung.
+**Lưu ý quan trọng:** đây chỉ là **gợi ý xác suất để kỹ thuật viên chuẩn bị trước linh kiện**, không phải kết luận chẩn đoán cuối cùng — trường `note` trong response luôn nhắc lại điều này.
+
+### Test AI Knowledge (Sprint 11) — và kiểm chứng nó nâng cấp AI Diagnostic
+
+**Ghi chú thiết kế quan trọng:** kế hoạch ban đầu dự định dùng Vector DB (pgvector) để tìm kiếm ngữ nghĩa, nhưng sau khi chuyển sang MariaDB (theo hosting thực tế) và theo đúng nguyên tắc "không xây trước cho quy mô chưa có" đã thống nhất, Sprint này dùng **tìm kiếm theo từ khóa** (đơn giản, đủ dùng cho quy mô SOP của 1 tiệm sửa chữa). Xem ghi chú chi tiết trong `knowledge-entry.entity.ts`.
+
+**Bước 1 – Tạo 1 SOP thật của PCTech (khác với kiến thức chung mà Claude vốn đã biết):**
+```bash
+curl -X POST http://localhost:3000/api/v1/knowledge -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"title":"Beep 3 tieng lien tuc - Quy trinh PCTech","content":"Theo kinh nghiem thuc te tai PCTech, may bat nguon co 3 tieng beep lien tuc tren 90% la do RAM long chan cam hoac oxy hoa chan tiep xuc, KHONG PHAI loi mainboard nhu nhieu noi khac hay chan doan. Quy trinh chuan cua PCTech: 1) Thao RAM ra, ve sinh chan tiep xuc bang gom tay hoac dung dich chuyen dung. 2) Cam lai chac chan. 3) Neu van beep, thu doi khe cam RAM khac. 4) Chi khi da thu ca 2 buoc tren van loi moi nghi den mainboard.","category":"mainboard","tags":["beep","RAM","khong len nguon","3 tieng"]}'
+```
+
+**Bước 2 – Test tìm kiếm trực tiếp (không qua AI):**
+```bash
+curl "http://localhost:3000/api/v1/knowledge/search?q=beep%203%20tieng%20khong%20len%20nguon" -H "Authorization: Bearer TOKEN"
+```
+Phải trả về đúng SOP vừa tạo.
+
+**Bước 3 – Tạo ticket với triệu chứng tương tự, rồi gọi lại AI Diagnostic:**
+```bash
+curl -X POST http://localhost:3000/api/v1/tickets -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"customerId":"CUSTOMER_ID","issueDescription":"May tinh bat nguon co 3 tieng beep lien tuc, khong len man hinh","deviceType":"desktop"}'
+
+curl http://localhost:3000/api/v1/diagnostic/TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+
+**Kết quả mong đợi (đây là điểm quan trọng nhất để kiểm chứng):**
+- Trường `matchedKnowledgeEntries` phải chứa `"Beep 3 tieng lien tuc - Quy trinh PCTech"` — chứng minh RAG đã tìm đúng SOP
+- `probableCauses` giờ sẽ **ưu tiên nguyên nhân RAM lỏng chân cắm/oxy hóa** (đúng theo SOP riêng của PCTech) thay vì liệt kê chung chung nhiều khả năng ngang nhau như trước khi có Knowledge Base
+
+### Test Cache chính xác + Xác nhận chẩn đoán (tiết kiệm chi phí + tự nuôi Knowledge Base)
+
+**Gọi lại y hệt ticket vừa chẩn đoán ở trên (dùng lại `TICKET_ID`):**
+```bash
+curl http://localhost:3000/api/v1/diagnostic/TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+Kết quả mong đợi: `fromCache: true` — **không gọi Claude API lần này**, trả về ngay lập tức từ cache. Kiểm tra log server sẽ thấy dòng `Cache hit cho ticket ... (da dung lai lan thu 1)`.
+
+**Xác nhận nguyên nhân đúng thực tế** (giả sử nguyên nhân số 0 trong `probableCauses` là đúng sau khi kỹ thuật viên kiểm tra):
+```bash
+curl -X POST http://localhost:3000/api/v1/diagnostic/TICKET_ID/confirm -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"confirmedCauseIndex":0,"actualFindingNote":"Da kiem tra, dung la RAM long chan, ve sinh xong may len binh thuong"}'
+```
+Kết quả mong đợi: trả về `knowledgeEntryId` — kiểm tra lại bằng:
+```bash
+curl http://localhost:3000/api/v1/knowledge -H "Authorization: Bearer TOKEN"
+```
+Sẽ thấy 1 mục Knowledge Base **mới tự động được tạo**, ghi lại đúng nguyên nhân đã xác nhận — dữ liệu này sẽ giúp các ticket có triệu chứng **tương tự nhưng không giống hệt** trong tương lai được chẩn đoán chính xác hơn qua RAG, thay vì phải dựa vào cache "đoán mò".
+
+### Test Upload ảnh + AI Diagnostic đọc hình ảnh (Claude Vision)
+
+**Mới bổ sung:** trước đây hệ thống chưa có chức năng upload file thật (chỉ có trong `schema.sql` tham khảo). Giờ đã code đầy đủ: upload ảnh → lưu vào `uploads/tickets/` trên server → AI Diagnostic tự động "nhìn" ảnh khi chẩn đoán (không cần OCR riêng, Claude đọc trực tiếp).
+
+**Bước 1 – Upload 1 ảnh cho ticket** (dùng `curl -F` để gửi multipart/form-data, thay `TICKET_ID` và đường dẫn ảnh thật trên máy bạn):
+```bash
+curl -X POST http://localhost:3000/api/v1/tickets/TICKET_ID/attachments \
+  -H "Authorization: Bearer TOKEN" \
+  -F "file=@C:\duong\dan\anh_loi.jpg"
+```
+Kết quả trả về có `id`, `fileName`, `filePath` — file đã được lưu vào thư mục `uploads/tickets/` trong project.
+
+**Bước 2 – Kiểm tra danh sách ảnh đã đính kèm:**
+```bash
+curl http://localhost:3000/api/v1/tickets/TICKET_ID/attachments -H "Authorization: Bearer TOKEN"
+```
+
+**Bước 3 – Gọi AI Diagnostic — giờ sẽ tự động đọc luôn ảnh vừa upload:**
+```bash
+curl http://localhost:3000/api/v1/diagnostic/TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+Kết quả mong đợi: `imagesAnalyzed: 1`, và nếu ảnh có nội dung quan sát được (màn hình lỗi, linh kiện cháy, dây cắm lỏng...), `probableCauses` sẽ phản ánh những gì AI "nhìn thấy" trong ảnh, không chỉ dựa vào mô tả chữ.
+
+**Giới hạn hiện tại cần biết:**
+- Chỉ nhận `image/jpeg`, `image/png`, `image/webp`, `image/gif`, và `application/pdf` (PDF chưa được AI Diagnostic đọc, chỉ lưu trữ) — giới hạn dung lượng **10MB/file**
+- File lưu **trực tiếp trên ổ đĩa server** (thư mục `uploads/`, đã thêm vào `.gitignore` để không đẩy nhầm lên GitHub) — khi mở rộng SaaS đa tenant thật sự, nên chuyển sang S3-compatible storage, chỉ cần sửa `AttachmentsService`, không đổi API
+- Cache chính xác (Sprint trước) giờ tính **cả ảnh đính kèm** vào key — nếu thêm ảnh mới cho cùng 1 ticket, cache cũ sẽ không áp dụng nữa (đúng ý, vì có thêm dữ liệu mới cần chẩn đoán lại)
+
+### Test AI Sales (rule-based, không gọi Claude API)
+
+**Bước 1 – Tạo linh kiện thêm để làm add-on** (ngoài RAM đã có):
+```bash
+curl -X POST http://localhost:3000/api/v1/warehouse/items -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"sku":"WIN11-LICENSE","name":"Ban quyen Windows 11","unit":"license","quantityOnHand":50,"costPrice":1000000,"sellPrice":1500000}'
+curl -X POST http://localhost:3000/api/v1/warehouse/items -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"sku":"ANTIVIRUS-1Y","name":"Antivirus ban quyen 1 nam","unit":"license","quantityOnHand":50,"costPrice":150000,"sellPrice":250000}'
+```
+
+**Bước 2 – Tạo rule: mua RAM thì gợi ý thêm Windows + Antivirus + dịch vụ vệ sinh:**
+```bash
+curl -X POST http://localhost:3000/api/v1/sales/rules -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"triggerType":"product_sku","triggerValue":"RAM-8GB-DDR4","suggestedProductSkus":["WIN11-LICENSE","ANTIVIRUS-1Y"],"suggestedServiceNote":"Ve sinh may dinh ky sau khi nang cap RAM"}'
+```
+
+**Bước 3 – Tạo đơn hàng mua RAM, rồi xem gợi ý add-on:**
+```bash
+curl -X POST http://localhost:3000/api/v1/shop/orders -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"customerId":"CUSTOMER_ID","items":[{"inventoryItemId":"RAM_ITEM_ID","quantity":1}]}'
+
+curl http://localhost:3000/api/v1/sales/suggest/order/ORDER_ID -H "Authorization: Bearer TOKEN"
+```
+Kết quả mong đợi: gợi ý gồm **Windows 11 License**, **Antivirus 1 năm** (kèm giá bán thật từ Kho), và ghi chú dịch vụ "Vệ sinh máy định kỳ".
+
+**Test tương tự cho Ticket** (tạo rule với `triggerType: "skill_code"`, `triggerValue: "mainboard"`), rồi gọi `GET /sales/suggest/ticket/:ticketId`.
 
 ## 4. Cấu trúc thư mục
 
