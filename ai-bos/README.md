@@ -1,4 +1,4 @@
-# AI BOS Backend – Sprint 1-2 + Chat Auto-Translate + AI Dispatcher + AI Pricing
+# AI BOS Backend – Sprint 1-2 + Chat Auto-Translate + AI Dispatcher + AI Pricing + AI Diagnostic
 
 Đây là khung code cho **Tuần 1 + Tuần 2** trong kế hoạch 4 tuần của AI BOS:
 Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
@@ -346,6 +346,25 @@ Kết quả mong đợi: `laborTotal = 800000` (300.000 + 500.000), `partsAmount
 curl -X PATCH http://localhost:3000/api/v1/tickets/TICKET_ID/quote -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
   -d '{"quotedPrice":1500000}'
 ```
+
+### Test AI Diagnostic (Sprint 11)
+
+**Cần `ANTHROPIC_API_KEY` thật trong `.env`** (đã cấu hình từ phần Chat Auto-Translate).
+
+**Tạo ticket với triệu chứng cụ thể:**
+```bash
+curl -X POST http://localhost:3000/api/v1/tickets -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"customerId":"CUSTOMER_ID","issueDescription":"May tinh de ban bat nguon nhung khong len man hinh, quat chay binh thuong, co 3 tieng beep lien tuc","deviceType":"desktop"}'
+```
+
+**Gọi AI Diagnostic:**
+```bash
+curl http://localhost:3000/api/v1/diagnostic/TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+
+Kết quả mong đợi: `probableCauses` là mảng gồm vài nguyên nhân (vd RAM lỗi tiếp xúc, mainboard lỗi...) kèm `probability` (tổng ~100) và `suggestedAction`, cùng `recommendedPartsToPrepare` gợi ý linh kiện nên mang theo.
+
+**Lưu ý quan trọng:** đây chỉ là **gợi ý xác suất để kỹ thuật viên chuẩn bị trước linh kiện**, không phải kết luận chẩn đoán cuối cùng — trường `note` trong response luôn nhắc lại điều này. Độ chính xác sẽ **tăng dần** khi triển khai AI Knowledge (Sprint tiếp theo) — lúc đó AI sẽ tham chiếu SOP/lịch sử sửa chữa thật của PCTech thay vì chỉ dùng kiến thức chung.
 
 ## 4. Cấu trúc thư mục
 

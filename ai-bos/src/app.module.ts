@@ -32,6 +32,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { DispatcherModule } from './modules/dispatcher/dispatcher.module';
 import { PricingModule } from './modules/pricing/pricing.module';
+import { DiagnosticModule } from './modules/diagnostic/diagnostic.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ChannelsModule } from './common/channels/channels.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
@@ -97,6 +98,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     ChatModule,
     DispatcherModule,
     PricingModule,
+    DiagnosticModule,
     NotificationModule,
     ChannelsModule,
     EventBusModule,
