@@ -24,7 +24,12 @@ export enum EventType {
   INVOICE_CREATED = 'invoice.created',
   INVOICE_PAID = 'invoice.paid',
 
-  // (Se bo sung tiep: warranty.expiring...)
+  // Warranty (Sprint 7)
+  WARRANTY_CREATED = 'warranty.created',
+  WARRANTY_EXPIRING = 'warranty.expiring',
+  WARRANTY_VOIDED = 'warranty.voided',
+
+  // (Se bo sung tiep: order.created cho Shop...)
 }
 
 export interface BaseEventPayload {

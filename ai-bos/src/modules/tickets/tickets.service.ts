@@ -139,6 +139,8 @@ export class TicketsService {
         ticketCode: ticket.ticketCode,
         customerId: ticket.customerId,
         finalPrice: ticket.finalPrice,
+        deviceType: ticket.deviceType,
+        deviceModel: ticket.deviceModel,
       });
     }
 

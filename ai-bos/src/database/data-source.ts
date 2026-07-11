@@ -9,6 +9,7 @@ import { TicketStatusHistory } from '../modules/tickets/ticket-status-history.en
 import { InventoryItem } from '../modules/warehouse/inventory-item.entity';
 import { TicketPart } from '../modules/warehouse/ticket-part.entity';
 import { Invoice } from '../modules/invoice/invoice.entity';
+import { Warranty } from '../modules/warranty/warranty.entity';
 import { EventLog } from '../common/event-bus/event-log.entity';
 
 dotenv.config();
@@ -29,6 +30,7 @@ export const AppDataSource = new DataSource({
     InventoryItem,
     TicketPart,
     Invoice,
+    Warranty,
     EventLog,
   ],
   migrations: ['src/database/migrations/*.ts'],

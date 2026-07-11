@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { InvoiceEventHandler } from '../../modules/invoice/invoice-event.handler';
 import { NotificationService } from '../../modules/notification/notification.service';
+import { WarrantyEventHandler } from '../../modules/warranty/warranty-event.handler';
 
 /**
  * EVENT DISPATCHER - DUY NHAT 1 NOI dang ky @Processor('ai-bos-events') trong toan he thong.
@@ -27,6 +28,7 @@ export class EventDispatcherProcessor extends WorkerHost {
   constructor(
     private readonly notificationService: NotificationService,
     private readonly invoiceEventHandler: InvoiceEventHandler,
+    private readonly warrantyEventHandler: WarrantyEventHandler,
   ) {
     super();
   }
@@ -36,8 +38,8 @@ export class EventDispatcherProcessor extends WorkerHost {
     const handlers: Array<{ name: string; run: () => Promise<void> }> = [
       { name: 'NotificationService', run: () => this.notificationService.handle(job) },
       { name: 'InvoiceEventHandler', run: () => this.invoiceEventHandler.handle(job) },
-      // Them module moi lang nghe event: chi can them 1 dong o day, vd:
-      // { name: 'WarrantyEventHandler', run: () => this.warrantyEventHandler.handle(job) },
+      { name: 'WarrantyEventHandler', run: () => this.warrantyEventHandler.handle(job) },
+      // Them module moi lang nghe event: chi can them 1 dong o day
     ];
 
     for (const handler of handlers) {

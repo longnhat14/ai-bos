@@ -11,6 +11,7 @@ import { TicketStatusHistory } from './modules/tickets/ticket-status-history.ent
 import { InventoryItem } from './modules/warehouse/inventory-item.entity';
 import { TicketPart } from './modules/warehouse/ticket-part.entity';
 import { Invoice } from './modules/invoice/invoice.entity';
+import { Warranty } from './modules/warranty/warranty.entity';
 import { EventLog } from './common/event-bus/event-log.entity';
 
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -19,6 +20,7 @@ import { CustomersModule } from './modules/customers/customers.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { WarehouseModule } from './modules/warehouse/warehouse.module';
 import { InvoiceModule } from './modules/invoice/invoice.module';
+import { WarrantyModule } from './modules/warranty/warranty.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
 import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.processor';
@@ -46,6 +48,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
           InventoryItem,
           TicketPart,
           Invoice,
+          Warranty,
           EventLog,
         ],
         synchronize: config.get('NODE_ENV') === 'development', // CHI true khi dev, production dung migration
@@ -70,6 +73,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     TicketsModule,
     WarehouseModule,
     InvoiceModule,
+    WarrantyModule,
     NotificationModule,
     EventBusModule,
   ],

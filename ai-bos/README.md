@@ -1,4 +1,4 @@
-# AI BOS Backend – Sprint 1-2: Platform Core + Ticket + CRM + Kho + Invoice
+# AI BOS Backend – Sprint 1-2: Platform Core + Ticket + CRM + Kho + Invoice + Warranty
 
 Đây là khung code cho **Tuần 1 + Tuần 2** trong kế hoạch 4 tuần của AI BOS:
 Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
@@ -115,6 +115,24 @@ Kiểm tra hóa đơn vừa tạo:
 curl http://localhost:3000/api/v1/invoices/by-ticket/TICKET_ID -H "Authorization: Bearer TOKEN"
 ```
 Sẽ thấy `partsAmount` (từ linh kiện RAM đã dùng = 700000) và `laborAmount` = 900000 - 700000 = 200000.
+
+### Test Warranty (tự động tạo cùng lúc với Invoice khi ticket đóng)
+
+Sau khi đóng ticket ở bước trên, log cũng sẽ có thêm dòng:
+```
+Da tu dong tao bao hanh cho ticket ..., het han: ...
+```
+
+**Kiểm tra bảo hành vừa tạo (mặc định 3 tháng, đổi qua `DEFAULT_WARRANTY_MONTHS` trong `.env`):**
+```bash
+curl http://localhost:3000/api/v1/warranty/by-ticket/TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+
+**Kiểm tra nhanh còn hạn hay không (endpoint quan trọng nhất cho nhân viên tiếp nhận):**
+```bash
+curl http://localhost:3000/api/v1/warranty/check/TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+Trả về `isActive: true`, `daysRemaining: ~90`.
 
 ## 4. Cấu trúc thư mục
 
