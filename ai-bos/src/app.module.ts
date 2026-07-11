@@ -22,6 +22,8 @@ import { KnowledgeEntry } from './modules/knowledge/knowledge-entry.entity';
 import { DiagnosticCache } from './modules/diagnostic/diagnostic-cache.entity';
 import { AddOnRule } from './modules/sales/add-on-rule.entity';
 import { TelegramBinding } from './modules/telegram/telegram-binding.entity';
+import { WebChatSession } from './modules/webchat/web-chat-session.entity';
+import { WebChatMessage } from './modules/webchat/web-chat-message.entity';
 import { EventLog } from './common/event-bus/event-log.entity';
 
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -42,6 +44,8 @@ import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
+import { WebChatModule } from './modules/webchat/webchat.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ChannelsModule } from './common/channels/channels.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
@@ -81,6 +85,8 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
           DiagnosticCache,
           AddOnRule,
           TelegramBinding,
+          WebChatSession,
+          WebChatMessage,
           EventLog,
         ],
         synchronize: config.get('NODE_ENV') === 'development', // CHI true khi dev, production dung migration
@@ -117,6 +123,8 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     SalesModule,
     WhatsAppModule,
     TelegramModule,
+    WebChatModule,
+    SettingsModule,
     NotificationModule,
     ChannelsModule,
     EventBusModule,

@@ -1,4 +1,4 @@
-# AI BOS Backend – HOÀN CHỈNH: Platform Core + 7 Business Modules + 5 AI Engine + Vision + WhatsApp + Telegram
+# AI BOS Backend – HOÀN CHỈNH: Platform Core + 7 Business Modules + 5 AI Engine + Vision + WhatsApp + Telegram + AI Chat Website + Branding
 
 Đây là khung code cho **Tuần 1 + Tuần 2** trong kế hoạch 4 tuần của AI BOS:
 Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
@@ -562,6 +562,123 @@ curl -X POST http://localhost:3000/api/v1/telegram/link -H "Content-Type: applic
 - Rule-based, **không gọi Claude API** cho các lệnh trên — nhanh, không tốn chi phí, đúng nguyên tắc đã áp dụng cho AI Sales
 - Chỉ Chat ID **đã liên kết** (qua Bước 5) mới nhận được phản hồi lệnh thật — Chat ID lạ chỉ nhận được hướng dẫn liên kết, không truy vấn được dữ liệu
 - Có thể mở rộng thêm lệnh mới dễ dàng — chỉ cần thêm điều kiện trong `telegram-command.service.ts`, không đụng code module khác
+
+### AI Chat Website (tư vấn khách hàng + kiểm tra kho thật + tạo ticket có xác nhận)
+
+**Cần `ANTHROPIC_API_KEY` thật trong `.env`** (đã cấu hình từ trước).
+
+**Ví dụ giao diện frontend có nút camera** (đúng yêu cầu của bạn — dùng thuộc tính HTML5 chuẩn, không cần thư viện camera riêng):
+```html
+<form id="chatForm">
+  <input type="text" id="messageInput" placeholder="Nhập tin nhắn..." />
+
+  <!-- Nut may camera: capture="environment" tu dong mo CAMERA SAU cua dien thoai -->
+  <label for="cameraInput">📷</label>
+  <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
+
+  <button type="submit">Gửi</button>
+</form>
+
+<script>
+async function sendMessage(sessionId, text, imageFile, tenantCode) {
+  const formData = new FormData();
+  formData.append('text', text);
+  formData.append('tenantCode', tenantCode);
+  if (sessionId) formData.append('sessionId', sessionId);
+  if (imageFile) formData.append('image', imageFile);
+
+  const res = await fetch('http://localhost:3000/api/v1/public/webchat/messages', {
+    method: 'POST',
+    body: formData, // KHONG set Content-Type thu cong - browser tu dat multipart boundary dung
+  });
+  return res.json();
+}
+</script>
+```
+
+Trên điện thoại, bấm vào 📷 sẽ **mở thẳng camera sau** (không phải thư viện ảnh) nhờ `capture="environment"` — không cần code WebRTC/`getUserMedia` phức tạp.
+
+**Test bằng curl (mô phỏng gửi tin nhắn kèm ảnh):**
+
+**Bước 1 – Khách hỏi về sản phẩm (AI tự tra kho thật):**
+```bash
+curl -X POST http://localhost:3000/api/v1/public/webchat/messages \
+  -F "text=Shop con RAM 8GB khong, gia bao nhieu?" \
+  -F "tenantCode=pctech"
+```
+Kết quả mong đợi: AI trả lời dựa trên dữ liệu Kho thật (đã tạo ở phần test Warehouse trước đó) — lưu lại `sessionId` trả về để dùng tiếp.
+
+**Bước 2 – Khách yêu cầu sửa máy, gửi kèm ảnh lỗi:**
+```bash
+curl -X POST http://localhost:3000/api/v1/public/webchat/messages \
+  -F "text=May tinh cua toi bi loi man hinh nhu the nay" \
+  -F "tenantCode=pctech" \
+  -F "sessionId=SESSION_ID_TU_BUOC_1" \
+  -F "image=@C:\duong\dan\anh_loi.jpg"
+```
+AI sẽ phân tích ảnh (Claude Vision) và hỏi thêm thông tin (tên, số điện thoại) trước khi đề xuất tạo ticket.
+
+**Bước 3 – Khách cung cấp thông tin + xác nhận tạo ticket:**
+```bash
+curl -X POST http://localhost:3000/api/v1/public/webchat/messages \
+  -F "text=Ten toi la Nguyen Van G, so dien thoai 0988776655. Dong y tao ticket." \
+  -F "tenantCode=pctech" \
+  -F "sessionId=SESSION_ID_TU_BUOC_1"
+```
+Kết quả mong đợi: response có `createdTicketId` khác `null` — kiểm tra lại:
+```bash
+curl http://localhost:3000/api/v1/tickets/CREATED_TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+
+**Xem lịch sử hội thoại:**
+```bash
+curl http://localhost:3000/api/v1/public/webchat/sessions/SESSION_ID/history
+```
+
+**Nguyên tắc quan trọng đã áp dụng:**
+- AI **không bao giờ tự bịa giá/tồn kho** — luôn gọi tool `check_inventory` tra dữ liệu thật
+- AI **không tự ý tạo ticket** — phải hỏi thông tin + chờ khách xác nhận rõ ràng trước khi gọi tool `create_ticket`, đúng nguyên tắc "AI đề xuất, có xác nhận" xuyên suốt dự án
+- Endpoint **public, không cần JWT** vì phục vụ khách vãng lai chưa đăng nhập — Sprint sau nên bổ sung rate-limit/CAPTCHA để chống spam trước khi dùng thật
+
+### Cài đặt Logo thương hiệu (Settings/Branding)
+
+**Bước 1 – Admin upload logo** (cần đăng nhập, dùng `TOKEN` như các API khác):
+```bash
+curl -X PATCH http://localhost:3000/api/v1/settings/branding/logo -H "Authorization: Bearer TOKEN" \
+  -F "logo=@C:\duong\dan\logo_pctech.png"
+```
+Kết quả trả về `logoUrl` (vd `/uploads/branding/xxxx.png`).
+
+**Bước 2 – Xem logo qua trình duyệt** (không cần đăng nhập, vì file logo serve công khai):
+```
+http://localhost:3000/uploads/branding/xxxx.png
+```
+
+**Bước 3 – Widget chat lấy logo tự động theo `tenantCode` (endpoint public, khách vãng lai dùng được):**
+```bash
+curl "http://localhost:3000/api/v1/public/webchat/branding?tenantCode=pctech"
+```
+Kết quả: `{ "logoUrl": "/uploads/branding/xxxx.png", "name": "PCTech Computer Repair" }`
+
+**Ví dụ frontend hiển thị logo trên màn hình chat:**
+```html
+<div id="chatHeader">
+  <img id="brandLogo" src="" alt="Logo" />
+  <span id="brandName"></span>
+</div>
+<script>
+async function loadBranding(tenantCode) {
+  const res = await fetch(`http://localhost:3000/api/v1/public/webchat/branding?tenantCode=${tenantCode}`);
+  const data = await res.json();
+  if (data.logoUrl) {
+    document.getElementById('brandLogo').src = `http://localhost:3000${data.logoUrl}`;
+  }
+  document.getElementById('brandName').textContent = data.name;
+}
+</script>
+```
+
+**Lưu ý bảo mật quan trọng:** chỉ đúng 1 thư mục `uploads/branding/` được serve công khai qua URL — các thư mục khác (`uploads/tickets`, `uploads/webchat` chứa ảnh lỗi máy/thông tin khách hàng) **không** được serve tĩnh, tránh lộ dữ liệu nhạy cảm ra internet.
 
 ## 4. Cấu trúc thư mục
 

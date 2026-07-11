@@ -39,7 +39,7 @@ export class Conversation extends TenantBaseEntity {
 
   // ID lien lac ben ngoai tuong ung voi kenh - vd voi WhatsApp la so dien thoai
   // dang whatsapp (wa_id). null neu channel = internal.
-  @Column({ name: 'external_contact_id', nullable: true })
+  @Column({ name: 'external_contact_id', type: 'varchar', nullable: true })
   externalContactId: string | null;
 
   @Column({ type: 'varchar', default: ConversationStatus.OPEN })

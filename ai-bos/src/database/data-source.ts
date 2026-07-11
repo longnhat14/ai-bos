@@ -20,6 +20,8 @@ import { KnowledgeEntry } from '../modules/knowledge/knowledge-entry.entity';
 import { DiagnosticCache } from '../modules/diagnostic/diagnostic-cache.entity';
 import { AddOnRule } from '../modules/sales/add-on-rule.entity';
 import { TelegramBinding } from '../modules/telegram/telegram-binding.entity';
+import { WebChatSession } from '../modules/webchat/web-chat-session.entity';
+import { WebChatMessage } from '../modules/webchat/web-chat-message.entity';
 import { EventLog } from '../common/event-bus/event-log.entity';
 
 dotenv.config();
@@ -51,6 +53,8 @@ export const AppDataSource = new DataSource({
     DiagnosticCache,
     AddOnRule,
     TelegramBinding,
+    WebChatSession,
+    WebChatMessage,
     EventLog,
   ],
   migrations: ['src/database/migrations/*.ts'],

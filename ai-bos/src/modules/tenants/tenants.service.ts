@@ -46,4 +46,11 @@ export class TenantsService implements OnModuleInit {
     }
     return tenant;
   }
+
+  /** Dung boi SettingsController khi Admin upload logo thuong hieu moi */
+  async updateLogo(tenantId: string, logoPath: string): Promise<Tenant> {
+    const tenant = await this.getById(tenantId);
+    tenant.logoPath = logoPath;
+    return this.tenantRepo.save(tenant);
+  }
 }
