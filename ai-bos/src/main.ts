@@ -9,7 +9,9 @@ async function bootstrap() {
   const uploadDir = AttachmentsService.getUploadDir();
   fs.mkdirSync(uploadDir, { recursive: true });
 
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true - can thiet de xac thuc chu ky webhook WhatsApp (X-Hub-Signature-256),
+  // Meta ky chu ky dua tren RAW BYTES cua body, khong phai JSON da parse.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.useGlobalPipes(
     new ValidationPipe({

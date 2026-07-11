@@ -1,4 +1,4 @@
-# AI BOS Backend – HOÀN CHỈNH Tuần 1-3: Platform Core + 7 Business Modules + 5 AI Engine + Upload ảnh/Vision
+# AI BOS Backend – HOÀN CHỈNH Tuần 1-3 + WhatsApp Business API: Platform Core + 7 Business Modules + 5 AI Engine + Upload ảnh/Vision + WhatsApp
 
 Đây là khung code cho **Tuần 1 + Tuần 2** trong kế hoạch 4 tuần của AI BOS:
 Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
@@ -467,6 +467,58 @@ curl http://localhost:3000/api/v1/sales/suggest/order/ORDER_ID -H "Authorization
 Kết quả mong đợi: gợi ý gồm **Windows 11 License**, **Antivirus 1 năm** (kèm giá bán thật từ Kho), và ghi chú dịch vụ "Vệ sinh máy định kỳ".
 
 **Test tương tự cho Ticket** (tạo rule với `triggerType: "skill_code"`, `triggerValue: "mainboard"`), rồi gọi `GET /sales/suggest/ticket/:ticketId`.
+
+### Cài đặt WhatsApp Business API (kênh chính cho khách RemoteIT: Anh, Canada, Úc, New Zealand, Mỹ)
+
+**Bước 1 – Tạo Meta App:**
+1. Vào https://developers.facebook.com/apps → Tạo App mới, loại "Business"
+2. Thêm sản phẩm **WhatsApp** vào app
+3. Trong mục WhatsApp → API Setup, lấy **Phone Number ID** (số test miễn phí Meta cấp sẵn để dùng thử) và **Temporary Access Token** (hết hạn 24h — cần đổi sang System User Token vĩnh viễn trước khi dùng thật)
+4. Vào App Settings → Basic, lấy **App Secret**
+
+**Bước 2 – Cấu hình `.env`:**
+```
+WHATSAPP_PHONE_NUMBER_ID=<phone_number_id_lay_o_buoc_1>
+WHATSAPP_ACCESS_TOKEN=<access_token_lay_o_buoc_1>
+WHATSAPP_APP_SECRET=<app_secret_lay_o_buoc_1>
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=<tu_dat_1_chuoi_bat_ky_vd_"aibos-verify-2026">
+WHATSAPP_TENANT_CODE=remoteit
+```
+
+**Bước 3 – Đăng ký Webhook với Meta** (cần server có domain public, dùng `ngrok` khi test local):
+```powershell
+ngrok http 3000
+```
+Lấy URL ngrok (dạng `https://xxxx.ngrok-free.app`), vào Meta App → WhatsApp → Configuration → Webhook, điền:
+- **Callback URL**: `https://xxxx.ngrok-free.app/webhooks/whatsapp`
+- **Verify Token**: đúng giá trị đã đặt trong `WHATSAPP_WEBHOOK_VERIFY_TOKEN`
+- Subscribe vào field **messages**
+
+Meta sẽ gọi thử `GET` để xác thực — nếu thấy log `WhatsApp webhook da xac thuc thanh cong voi Meta` là thành công.
+
+**Bước 4 – Test nhận tin nhắn thật:** dùng chính điện thoại của bạn, thêm số test WhatsApp Meta cấp vào danh bạ, nhắn tin bất kỳ (vd "Hello, my internet is not working"). Kiểm tra log server sẽ thấy:
+```
+Tu dong tao khach hang moi tu WhatsApp: <so_dien_thoai>
+Da xu ly tin nhan WhatsApp tu <so_dien_thoai>: "Hello, my internet is not working"
+```
+
+**Bước 5 – Kiểm tra hội thoại đã tự động tạo:**
+```bash
+curl http://localhost:3000/api/v1/customers -H "Authorization: Bearer TOKEN_REMOTEIT"
+```
+Sẽ thấy khách hàng mới tự động tạo từ số điện thoại WhatsApp.
+
+**Bước 6 – Nhân viên trả lời bằng tiếng Việt, kiểm tra khách nhận được bản tiếng Anh THẬT trên điện thoại:**
+```bash
+curl -X POST http://localhost:3000/api/v1/chat/conversations/CONV_ID/messages -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN_REMOTEIT" \
+  -d '{"senderType":"staff","text":"Vui long kiem tra lai modem va khoi dong lai router."}'
+```
+Kết quả mong đợi: **điện thoại thật của bạn nhận được tin nhắn WhatsApp bằng tiếng Anh**, đã dịch tự động — đây là bằng chứng toàn bộ luồng end-to-end hoạt động thật, không phải mô phỏng.
+
+**Lưu ý quan trọng:**
+- Số điện thoại test của Meta **chỉ nhắn được tới 5 số đã thêm vào danh sách "Recipients"** trong Meta App Dashboard — cần thêm số điện thoại thật của bạn vào đó trước khi test
+- Trước khi dùng thật cho khách hàng thật, cần **đăng ký số điện thoại doanh nghiệp thật** (không dùng số test của Meta) và chuyển Access Token sang loại vĩnh viễn (System User Token)
+- Endpoint webhook (`/webhooks/whatsapp`) **không yêu cầu JWT** vì Meta gọi từ ngoài — bảo mật dựa vào xác thực chữ ký `X-Hub-Signature-256`, đã code sẵn trong `whatsapp-webhook.controller.ts`
 
 ## 4. Cấu trúc thư mục
 

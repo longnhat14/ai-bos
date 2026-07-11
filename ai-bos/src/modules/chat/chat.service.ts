@@ -1,25 +1,29 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { EventType } from '../../common/event-bus/events';
 import { TenantsService } from '../tenants/tenants.service';
+import { WhatsAppChannel } from '../whatsapp/whatsapp-channel.service';
 import { ChatMessage, SenderType } from './chat-message.entity';
-import { Conversation } from './conversation.entity';
+import { Conversation, ConversationChannel } from './conversation.entity';
 import { CreateConversationDto, SendMessageDto } from './dto/chat.dto';
 import { TranslationService } from './translation.service';
 
-// Tenant code duy nhat duoc bat tinh nang dich tu dong - da thong nhat truoc day:
-// "Tinh nang dich tu dong chi ap dung cho du an RemoteITFix, khong ap dung cho PCTech"
+// Tenant code duy nhat duoc bat tinh nang dich tu dong theo mac dinh - da thong nhat truoc day:
+// "Mac dinh BAT cho RemoteIT, mac dinh TAT cho PCTech - nhung co the bat rieng tung conversation"
 const AUTO_TRANSLATE_TENANT_CODE = 'remoteit';
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(
     @InjectRepository(Conversation) private readonly conversationRepo: Repository<Conversation>,
     @InjectRepository(ChatMessage) private readonly messageRepo: Repository<ChatMessage>,
     private readonly tenantsService: TenantsService,
     private readonly translationService: TranslationService,
+    @Inject(forwardRef(() => WhatsAppChannel)) private readonly whatsAppChannel: WhatsAppChannel,
     private readonly eventBus: EventBusService,
   ) {}
 
@@ -42,10 +46,44 @@ export class ChatService {
       customerLanguage: dto.customerLanguage || 'en',
       staffLanguage: 'vi',
       autoTranslateEnabled,
+      channel: ConversationChannel.INTERNAL, // tao qua API luon la "internal" - WhatsApp tao qua findOrCreateForWhatsApp
     });
     await this.conversationRepo.save(conversation);
 
     return conversation;
+  }
+
+  /**
+   * Dung boi WhatsAppWebhookController khi co tin nhan WhatsApp MOI den ma chua tung
+   * co cuoc hoi thoai nao gan voi so dien thoai nay - tu dong tao 1 conversation
+   * voi channel = whatsapp, danh dau externalContactId = so dien thoai WhatsApp.
+   */
+  async findOrCreateForWhatsApp(
+    tenantId: string,
+    customerId: string,
+    phoneNumber: string,
+  ): Promise<Conversation> {
+    const existing = await this.conversationRepo.findOne({
+      where: {
+        tenantId,
+        customerId,
+        channel: ConversationChannel.WHATSAPP,
+        externalContactId: phoneNumber,
+      },
+    });
+    if (existing) return existing;
+
+    const tenant = await this.tenantsService.getById(tenantId);
+    const conversation = this.conversationRepo.create({
+      tenantId,
+      customerId,
+      customerLanguage: 'en', // mac dinh tieng Anh cho khach WhatsApp quoc te (Sprint sau co the tu dong nhan dien)
+      staffLanguage: 'vi',
+      autoTranslateEnabled: tenant.code === AUTO_TRANSLATE_TENANT_CODE,
+      channel: ConversationChannel.WHATSAPP,
+      externalContactId: phoneNumber,
+    });
+    return this.conversationRepo.save(conversation);
   }
 
   async findConversation(tenantId: string, id: string): Promise<Conversation> {
@@ -55,11 +93,14 @@ export class ChatService {
   }
 
   /**
-   * Gui tin nhan - day la noi xu ly dich tu dong.
+   * Gui tin nhan - day la noi xu ly dich tu dong VA gui that ra kenh ben ngoai.
    *
    * Neu conversation.autoTranslateEnabled = false (vd tenant PCTech), tin nhan
-   * duoc luu nguyen ban, translatedText = originalText, KHONG goi Claude API
-   * (tranh ton chi phi API khong can thiet cho tenant khong dung tinh nang nay).
+   * duoc luu nguyen ban, translatedText = originalText, KHONG goi Claude API.
+   *
+   * Neu conversation.channel = whatsapp VA nguoi gui la STAFF, sau khi dich xong
+   * se GUI THAT tin nhan da dich toi khach qua WhatsAppChannel - day la diem
+   * ket noi giua he thong chat noi bo va kenh WhatsApp that.
    */
   async sendMessage(
     tenantId: string,
@@ -96,6 +137,18 @@ export class ChatService {
       messageId: message.id,
       senderType: dto.senderType,
     });
+
+    // Neu la tin nhan cua staff tren 1 cuoc hoi thoai WhatsApp -> gui THAT ra ngoai cho khach
+    if (
+      !isFromCustomer &&
+      conversation.channel === ConversationChannel.WHATSAPP &&
+      conversation.externalContactId
+    ) {
+      await this.whatsAppChannel.send(
+        { externalId: conversation.externalContactId },
+        { text: translatedText },
+      );
+    }
 
     return message;
   }

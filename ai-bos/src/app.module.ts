@@ -39,6 +39,7 @@ import { PricingModule } from './modules/pricing/pricing.module';
 import { DiagnosticModule } from './modules/diagnostic/diagnostic.module';
 import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { SalesModule } from './modules/sales/sales.module';
+import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ChannelsModule } from './common/channels/channels.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
@@ -111,6 +112,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     DiagnosticModule,
     KnowledgeModule,
     SalesModule,
+    WhatsAppModule,
     NotificationModule,
     ChannelsModule,
     EventBusModule,
