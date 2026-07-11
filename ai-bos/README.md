@@ -1,4 +1,4 @@
-# AI BOS Backend – HOÀN CHỈNH Tuần 1-3 + WhatsApp Business API: Platform Core + 7 Business Modules + 5 AI Engine + Upload ảnh/Vision + WhatsApp
+# AI BOS Backend – HOÀN CHỈNH: Platform Core + 7 Business Modules + 5 AI Engine + Vision + WhatsApp + Telegram
 
 Đây là khung code cho **Tuần 1 + Tuần 2** trong kế hoạch 4 tuần của AI BOS:
 Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
@@ -519,6 +519,49 @@ Kết quả mong đợi: **điện thoại thật của bạn nhận được ti
 - Số điện thoại test của Meta **chỉ nhắn được tới 5 số đã thêm vào danh sách "Recipients"** trong Meta App Dashboard — cần thêm số điện thoại thật của bạn vào đó trước khi test
 - Trước khi dùng thật cho khách hàng thật, cần **đăng ký số điện thoại doanh nghiệp thật** (không dùng số test của Meta) và chuyển Access Token sang loại vĩnh viễn (System User Token)
 - Endpoint webhook (`/webhooks/whatsapp`) **không yêu cầu JWT** vì Meta gọi từ ngoài — bảo mật dựa vào xác thực chữ ký `X-Hub-Signature-256`, đã code sẵn trong `whatsapp-webhook.controller.ts`
+
+### Cài đặt Telegram Bot (kênh nội bộ: quản trị, kỹ thuật viên, giám đốc)
+
+**Bước 1 – Tạo Bot với @BotFather trên Telegram:**
+1. Mở Telegram, tìm và chat với `@BotFather`
+2. Gõ `/newbot`, đặt tên và username cho bot (username phải kết thúc bằng `bot`, vd `aibos_pctech_bot`)
+3. BotFather trả về **Bot Token** dạng `123456:ABC-DEF...`
+
+**Bước 2 – Cấu hình `.env`:**
+```
+TELEGRAM_BOT_TOKEN=<token_lay_o_buoc_1>
+TELEGRAM_WEBHOOK_SECRET=<tu_dat_1_chuoi_bat_ky>
+```
+
+**Bước 3 – Đăng ký Webhook với Telegram** (dùng `ngrok` như phần WhatsApp, hoặc dùng chung ngrok đang chạy nếu cùng port):
+```bash
+curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://xxxx.ngrok-free.app/webhooks/telegram","secret_token":"<TELEGRAM_WEBHOOK_SECRET>"}'
+```
+Kết quả mong đợi: `{"ok":true,"result":true,"description":"Webhook was set"}`
+
+**Bước 4 – Nhắn bất kỳ tin nhắn nào cho Bot của bạn trên Telegram** (tìm đúng username bot đã tạo, bấm Start). Bot sẽ trả lời:
+```
+👋 Chào bạn! Chat ID của bạn là: 123456789
+Vui lòng đăng nhập vào hệ thống AI BOS và liên kết Telegram bằng ID này trước khi có thể sử dụng lệnh.
+```
+
+**Bước 5 – Liên kết Chat ID với tài khoản (gọi API có JWT):**
+```bash
+curl -X POST http://localhost:3000/api/v1/telegram/link -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"telegramChatId":"123456789"}'
+```
+
+**Bước 6 – Test lệnh thật qua Telegram** — nhắn cho Bot các câu:
+- `doanh thu hôm nay` → Bot trả lời doanh thu hôm nay + tháng này (lấy từ Dashboard thật)
+- `ticket đang mở` → số ticket đang mở + đã đóng hôm nay
+- `tồn kho thấp` → danh sách linh kiện sắp hết hàng
+
+**Lưu ý quan trọng:**
+- Rule-based, **không gọi Claude API** cho các lệnh trên — nhanh, không tốn chi phí, đúng nguyên tắc đã áp dụng cho AI Sales
+- Chỉ Chat ID **đã liên kết** (qua Bước 5) mới nhận được phản hồi lệnh thật — Chat ID lạ chỉ nhận được hướng dẫn liên kết, không truy vấn được dữ liệu
+- Có thể mở rộng thêm lệnh mới dễ dàng — chỉ cần thêm điều kiện trong `telegram-command.service.ts`, không đụng code module khác
 
 ## 4. Cấu trúc thư mục
 

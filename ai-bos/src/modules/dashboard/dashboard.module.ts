@@ -12,5 +12,6 @@ import { DashboardService } from './dashboard.service';
   imports: [TypeOrmModule.forFeature([Ticket, Invoice, InventoryItem, Order, User])],
   controllers: [DashboardController],
   providers: [DashboardService],
+  exports: [DashboardService],
 })
 export class DashboardModule {}

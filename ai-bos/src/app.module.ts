@@ -21,6 +21,7 @@ import { PriceCatalog } from './modules/pricing/price-catalog.entity';
 import { KnowledgeEntry } from './modules/knowledge/knowledge-entry.entity';
 import { DiagnosticCache } from './modules/diagnostic/diagnostic-cache.entity';
 import { AddOnRule } from './modules/sales/add-on-rule.entity';
+import { TelegramBinding } from './modules/telegram/telegram-binding.entity';
 import { EventLog } from './common/event-bus/event-log.entity';
 
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -40,6 +41,7 @@ import { DiagnosticModule } from './modules/diagnostic/diagnostic.module';
 import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
+import { TelegramModule } from './modules/telegram/telegram.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ChannelsModule } from './common/channels/channels.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
@@ -78,6 +80,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
           KnowledgeEntry,
           DiagnosticCache,
           AddOnRule,
+          TelegramBinding,
           EventLog,
         ],
         synchronize: config.get('NODE_ENV') === 'development', // CHI true khi dev, production dung migration
@@ -113,6 +116,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     KnowledgeModule,
     SalesModule,
     WhatsAppModule,
+    TelegramModule,
     NotificationModule,
     ChannelsModule,
     EventBusModule,

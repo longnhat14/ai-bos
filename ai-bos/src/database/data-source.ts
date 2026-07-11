@@ -19,6 +19,7 @@ import { PriceCatalog } from '../modules/pricing/price-catalog.entity';
 import { KnowledgeEntry } from '../modules/knowledge/knowledge-entry.entity';
 import { DiagnosticCache } from '../modules/diagnostic/diagnostic-cache.entity';
 import { AddOnRule } from '../modules/sales/add-on-rule.entity';
+import { TelegramBinding } from '../modules/telegram/telegram-binding.entity';
 import { EventLog } from '../common/event-bus/event-log.entity';
 
 dotenv.config();
@@ -49,6 +50,7 @@ export const AppDataSource = new DataSource({
     KnowledgeEntry,
     DiagnosticCache,
     AddOnRule,
+    TelegramBinding,
     EventLog,
   ],
   migrations: ['src/database/migrations/*.ts'],
