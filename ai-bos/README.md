@@ -1,4 +1,4 @@
-# AI BOS Backend – Sprint 1-2 HOÀN CHỈNH: Platform Core + 7 Business Modules
+# AI BOS Backend – Sprint 1-2 + Chat Auto-Translate: Platform Core + 7 Business Modules + AI Dịch tự động (RemoteIT)
 
 Đây là khung code cho **Tuần 1 + Tuần 2** trong kế hoạch 4 tuần của AI BOS:
 Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
@@ -169,6 +169,69 @@ Trả về: số ticket đang mở, số ticket đóng hôm nay, số linh kiệ
 curl http://localhost:3000/api/v1/dashboard/technician-workload -H "Authorization: Bearer TOKEN"
 ```
 Trả về danh sách kỹ thuật viên kèm số ticket đang xử lý — dữ liệu này sẽ được **AI Dispatcher (Sprint 9)** dùng để biết ai đang rảnh/bận khi đề xuất giao việc.
+
+### Test Chat AI Dịch tự động (CHỈ hoạt động với tenant `remoteit`)
+
+**Bước 0 – Cấu hình API key:** thêm `ANTHROPIC_API_KEY` thật vào file `.env` (lấy tại https://console.anthropic.com/settings/keys), sau đó restart server.
+
+**Bước 1 – Đăng ký tài khoản cho tenant RemoteIT** (chú ý thêm `tenantCode`):
+```bash
+curl -X POST http://localhost:3000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"staff@remoteit.vn","password":"123456","fullName":"Nhan Vien Ho Tro","role":"admin","tenantCode":"remoteit"}'
+```
+Lấy `accessToken` (gọi là `TOKEN_REMOTEIT` bên dưới) — **token này khác với token của tenant `pctech`**, vì mỗi tenant có user riêng.
+
+**Bước 2 – Tạo khách hàng (thuộc tenant RemoteIT):**
+```bash
+curl -X POST http://localhost:3000/api/v1/customers \
+  -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN_REMOTEIT" \
+  -d '{"fullName":"John Smith","phone":"+6591234567"}'
+```
+
+**Bước 3 – Tạo cuộc hội thoại, khai báo ngôn ngữ khách hàng là tiếng Anh:**
+```bash
+curl -X POST http://localhost:3000/api/v1/chat/conversations \
+  -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN_REMOTEIT" \
+  -d '{"customerId":"CUSTOMER_ID","customerLanguage":"en"}'
+```
+Lưu lại `id` cuộc hội thoại (gọi là `CONV_ID`).
+
+**Bước 4 – Khách hàng nhắn tin bằng tiếng Anh:**
+```bash
+curl -X POST http://localhost:3000/api/v1/chat/conversations/CONV_ID/messages \
+  -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN_REMOTEIT" \
+  -d '{"senderType":"customer","text":"My internet connection keeps disconnecting every few minutes."}'
+```
+
+**Bước 5 – Nhân viên trả lời bằng tiếng Việt:**
+```bash
+curl -X POST http://localhost:3000/api/v1/chat/conversations/CONV_ID/messages \
+  -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN_REMOTEIT" \
+  -d '{"senderType":"staff","text":"Anh vui long kiem tra lai day cap mang xem co bi long khong."}'
+```
+
+**Bước 6 – Xem màn hình của NHÂN VIÊN (thấy cả bản gốc + bản dịch):**
+```bash
+curl http://localhost:3000/api/v1/chat/conversations/CONV_ID/messages/staff-view -H "Authorization: Bearer TOKEN_REMOTEIT"
+```
+Kết quả mong đợi: tin nhắn 1 có `originalText` tiếng Anh + `translatedText` đã dịch sang tiếng Việt; tin nhắn 2 có `originalText` tiếng Việt + `translatedText` đã dịch sang tiếng Anh.
+
+**Bước 7 – Xem màn hình của KHÁCH HÀNG (chỉ thấy tiếng Anh, không bao giờ thấy tiếng Việt):**
+```bash
+curl http://localhost:3000/api/v1/chat/conversations/CONV_ID/messages/customer-view -H "Authorization: Bearer TOKEN_REMOTEIT"
+```
+Kết quả mong đợi: **cả 2 tin nhắn đều bằng tiếng Anh** — tin nhắn 1 là nguyên văn khách gõ, tin nhắn 2 là bản dịch từ tiếng Việt sang tiếng Anh.
+
+**Đối chứng: test với tenant PCTech (không dịch)** — lặp lại các bước trên với `TOKEN` của `pctech` thay vì `tenantCode: "remoteit"` khi tạo conversation. Kết quả: `translatedText` sẽ **giống hệt** `originalText` (không gọi Claude API, không tốn chi phí), vì tính năng dịch chỉ bật cho RemoteIT.
+
+**Trường hợp đặc biệt: PCTech gặp khách nước ngoài** — có thể bật dịch riêng cho đúng cuộc hội thoại đó, không ảnh hưởng đến các khách PCTech khác:
+```bash
+curl -X POST http://localhost:3000/api/v1/chat/conversations \
+  -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN_PCTECH" \
+  -d '{"customerId":"CUSTOMER_ID","customerLanguage":"en","enableAutoTranslate":true}'
+```
+Cuộc hội thoại này sẽ dịch bình thường dù thuộc tenant PCTech, vì `enableAutoTranslate: true` ghi đè mặc định của tenant.
 
 ## 4. Cấu trúc thư mục
 

@@ -7,6 +7,9 @@ export class LoginDto {
 
   @IsNotEmpty()
   password: string;
+
+  @IsOptional()
+  tenantCode?: string;
 }
 
 export class RegisterDto {
@@ -25,4 +28,7 @@ export class RegisterDto {
 
   @IsOptional()
   phone?: string;
+
+  @IsOptional()
+  tenantCode?: string;
 }

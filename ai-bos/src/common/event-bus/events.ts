@@ -34,6 +34,9 @@ export enum EventType {
   ORDER_CONFIRMED = 'order.confirmed',
   ORDER_COMPLETED = 'order.completed',
   ORDER_CANCELLED = 'order.cancelled',
+
+  // Chat / Auto-Translate (chi ap dung cho RemoteIT)
+  CHAT_MESSAGE_SENT = 'chat.message_sent',
 }
 
 export interface BaseEventPayload {

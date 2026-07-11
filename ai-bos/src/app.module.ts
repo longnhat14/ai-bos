@@ -14,6 +14,8 @@ import { Invoice } from './modules/invoice/invoice.entity';
 import { Warranty } from './modules/warranty/warranty.entity';
 import { Order } from './modules/shop/order.entity';
 import { OrderItem } from './modules/shop/order-item.entity';
+import { Conversation } from './modules/chat/conversation.entity';
+import { ChatMessage } from './modules/chat/chat-message.entity';
 import { EventLog } from './common/event-bus/event-log.entity';
 
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -25,6 +27,7 @@ import { InvoiceModule } from './modules/invoice/invoice.module';
 import { WarrantyModule } from './modules/warranty/warranty.module';
 import { ShopModule } from './modules/shop/shop.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
 import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.processor';
@@ -55,6 +58,8 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
           Warranty,
           Order,
           OrderItem,
+          Conversation,
+          ChatMessage,
           EventLog,
         ],
         synchronize: config.get('NODE_ENV') === 'development', // CHI true khi dev, production dung migration
@@ -82,6 +87,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     WarrantyModule,
     ShopModule,
     DashboardModule,
+    ChatModule,
     NotificationModule,
     EventBusModule,
   ],
