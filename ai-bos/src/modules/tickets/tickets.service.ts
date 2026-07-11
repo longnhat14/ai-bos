@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { EventType } from '../../common/event-bus/events';
 import {
@@ -23,6 +23,16 @@ const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   [TicketStatus.CLOSED]: [],
   [TicketStatus.CANCELLED]: [],
 };
+
+// Dung chung voi Dashboard - trang thai duoc coi la "dang mo", phuc vu AI Dispatcher tinh workload
+const OPEN_TICKET_STATUSES = [
+  TicketStatus.RECEIVED,
+  TicketStatus.DIAGNOSING,
+  TicketStatus.QUOTED,
+  TicketStatus.CONFIRMED,
+  TicketStatus.REPAIRING,
+  TicketStatus.TESTING,
+];
 
 @Injectable()
 export class TicketsService {
@@ -171,6 +181,13 @@ export class TicketsService {
       note: note ?? undefined,
     });
     await this.historyRepo.save(history);
+  }
+
+  /** Dung boi AI Dispatcher (Sprint 9) de tinh tieu chi "do ban" cua ky thuat vien */
+  async countOpenTicketsByTechnician(tenantId: string, technicianId: string): Promise<number> {
+    return this.ticketRepo.count({
+      where: { tenantId, assignedTechnicianId: technicianId, status: In(OPEN_TICKET_STATUSES) },
+    });
   }
 
   /**

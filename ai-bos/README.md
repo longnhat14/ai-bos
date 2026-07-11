@@ -1,4 +1,4 @@
-# AI BOS Backend – Sprint 1-2 + Chat Auto-Translate: Platform Core + 7 Business Modules + AI Dịch tự động (RemoteIT)
+# AI BOS Backend – Sprint 1-2 + Chat Auto-Translate + AI Dispatcher (Sprint 9)
 
 Đây là khung code cho **Tuần 1 + Tuần 2** trong kế hoạch 4 tuần của AI BOS:
 Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
@@ -232,6 +232,84 @@ curl -X POST http://localhost:3000/api/v1/chat/conversations \
   -d '{"customerId":"CUSTOMER_ID","customerLanguage":"en","enableAutoTranslate":true}'
 ```
 Cuộc hội thoại này sẽ dịch bình thường dù thuộc tenant PCTech, vì `enableAutoTranslate: true` ghi đè mặc định của tenant.
+
+### Test AI Dispatcher (Sprint 9)
+
+**Bước 1 – Đăng ký 2 kỹ thuật viên khác nhau để so sánh điểm:**
+```bash
+curl -X POST http://localhost:3000/api/v1/auth/register -H "Content-Type: application/json" \
+  -d '{"email":"ktv1@pctech.vn","password":"123456","fullName":"Ky Thuat Vien A","role":"technician"}'
+curl -X POST http://localhost:3000/api/v1/auth/register -H "Content-Type: application/json" \
+  -d '{"email":"ktv2@pctech.vn","password":"123456","fullName":"Ky Thuat Vien B","role":"technician"}'
+```
+Lấy `id` của 2 user vừa tạo (nằm trong response `user.id`).
+
+**Bước 2 – Cập nhật hồ sơ kỹ thuật viên (kỹ năng, khu vực)** — dùng token Admin:
+```bash
+# KTV A: gioi mainboard, o Buon Ma Thuot
+curl -X PATCH http://localhost:3000/api/v1/users/TECH_A_ID/profile -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"skills":[{"skill":"mainboard","level":5}],"city":"Buon Ma Thuot"}'
+
+# KTV B: gioi mainboard nhung it kinh nghiem hon, o tinh khac
+curl -X PATCH http://localhost:3000/api/v1/users/TECH_B_ID/profile -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"skills":[{"skill":"mainboard","level":2}],"city":"Da Lat"}'
+```
+
+**Bước 3 – Tạo ticket của khách ở Buôn Ma Thuột, cần kỹ năng mainboard:**
+```bash
+curl -X POST http://localhost:3000/api/v1/tickets -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"customerId":"CUSTOMER_ID","issueDescription":"May khong len nguon","skillRequired":["mainboard"]}'
+```
+(Khách hàng `CUSTOMER_ID` cần có `city: "Buon Ma Thuot"` khi tạo ở bước Customer trước đó.)
+
+**Bước 4 – Xem AI Dispatcher đề xuất (chế độ Manual/Semi-Auto):**
+```bash
+curl http://localhost:3000/api/v1/dispatcher/suggest/TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+Kết quả mong đợi: **KTV A đứng đầu danh sách** (điểm cao hơn) vì vừa giỏi mainboard hơn (level 5 > 2) vừa cùng khu vực với khách (Buôn Ma Thuột), thấy rõ `breakdown` từng tiêu chí.
+
+**Bước 5 – Test chế độ Auto (tự động giao luôn, không cần xác nhận):**
+```bash
+curl -X POST http://localhost:3000/api/v1/dispatcher/auto-assign/TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+Kiểm tra lại ticket đã có `assignedTechnicianId` = id của KTV A:
+```bash
+curl http://localhost:3000/api/v1/tickets/TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+
+### Test AI Dispatcher cho RemoteIT (Onsite vs Remote Engineer)
+
+**Bước 1 – Đăng ký 1 Remote Engineer cho tenant RemoteIT:**
+```bash
+curl -X POST http://localhost:3000/api/v1/auth/register -H "Content-Type: application/json" \
+  -d '{"email":"remote1@remoteit.vn","password":"123456","fullName":"Remote Engineer X","role":"technician","tenantCode":"remoteit"}'
+```
+
+**Bước 2 – Cập nhật hồ sơ: đánh dấu `isRemote: true`, quốc gia Việt Nam:**
+```bash
+curl -X PATCH http://localhost:3000/api/v1/users/REMOTE_TECH_ID/profile -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN_REMOTEIT" \
+  -d '{"skills":[{"skill":"network","level":5}],"country":"VN","isRemote":true}'
+```
+
+**Bước 3 – Tạo khách hàng ở Singapore (khác quốc gia với KTV):**
+```bash
+curl -X POST http://localhost:3000/api/v1/customers -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN_REMOTEIT" \
+  -d '{"fullName":"Tan Wei Ling","phone":"+6598765432","country":"SG"}'
+```
+
+**Bước 4 – Tạo ticket cho khách Singapore, cần kỹ năng network:**
+```bash
+curl -X POST http://localhost:3000/api/v1/tickets -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN_REMOTEIT" \
+  -d '{"customerId":"CUSTOMER_SG_ID","issueDescription":"Internet keeps disconnecting","skillRequired":["network"]}'
+```
+
+**Bước 5 – Xem đề xuất:**
+```bash
+curl http://localhost:3000/api/v1/dispatcher/suggest/TICKET_ID -H "Authorization: Bearer TOKEN_REMOTEIT"
+```
+Kết quả mong đợi: Remote Engineer X **vẫn xuất hiện trong danh sách đề xuất** dù khác quốc gia với khách (VN vs SG) — vì `isRemote: true` không bị áp dụng luật "phải cùng quốc gia".
+
+**Đối chứng:** nếu tạo thêm 1 KTV onsite (`isRemote: false`, `country: "VN"`) và thử đề xuất cho cùng ticket khách Singapore này, KTV onsite đó sẽ **không xuất hiện trong danh sách** — vì bị loại ngay từ đầu (khác quốc gia + không phải remote = không khả thi vật lý).
 
 ## 4. Cấu trúc thư mục
 

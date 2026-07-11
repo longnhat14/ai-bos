@@ -17,6 +17,11 @@ export class CreateCustomerDto {
   @IsOptional()
   city?: string;
 
+  // Ma quoc gia ISO, vd: 'VN', 'SG'. Neu khong truyen, mac dinh 'VN' (theo entity).
+  // Quan trong voi RemoteIT - khach hang quoc te.
+  @IsOptional()
+  country?: string;
+
   @IsOptional()
   notes?: string;
 }
@@ -33,6 +38,9 @@ export class UpdateCustomerDto {
 
   @IsOptional()
   city?: string;
+
+  @IsOptional()
+  country?: string;
 
   @IsOptional()
   notes?: string;

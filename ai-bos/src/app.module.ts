@@ -20,6 +20,7 @@ import { EventLog } from './common/event-bus/event-log.entity';
 
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { WarehouseModule } from './modules/warehouse/warehouse.module';
@@ -28,7 +29,9 @@ import { WarrantyModule } from './modules/warranty/warranty.module';
 import { ShopModule } from './modules/shop/shop.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { DispatcherModule } from './modules/dispatcher/dispatcher.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { ChannelsModule } from './common/channels/channels.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
 import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.processor';
 
@@ -80,6 +83,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
 
     TenantsModule,
     AuthModule,
+    UsersModule,
     CustomersModule,
     TicketsModule,
     WarehouseModule,
@@ -88,7 +92,9 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     ShopModule,
     DashboardModule,
     ChatModule,
+    DispatcherModule,
     NotificationModule,
+    ChannelsModule,
     EventBusModule,
   ],
   // EventDispatcherProcessor la DUY NHAT noi dang ky @Processor('ai-bos-events').

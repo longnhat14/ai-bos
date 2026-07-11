@@ -19,6 +19,11 @@ export class Customer extends TenantBaseEntity {
   @Column({ nullable: true })
   city: string;
 
+  // Ma quoc gia ISO 3166-1 alpha-2, vd: 'VN', 'SG', 'JP'. Quan trong cho RemoteIT
+  // (khach hang quoc te) - PCTech mac dinh 'VN' neu khong truyen.
+  @Column({ default: 'VN' })
+  country: string;
+
   @Column({ type: 'text', nullable: true })
   notes: string;
 

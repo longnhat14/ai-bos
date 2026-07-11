@@ -24,6 +24,20 @@ export class User extends TenantBaseEntity {
   @Column({ nullable: true })
   phone: string;
 
+  // Khu vuc phuc vu cua ky thuat vien - dung cho tieu chi "khoang cach" trong AI Dispatcher
+  @Column({ nullable: true })
+  city: string;
+
+  // Ma quoc gia ISO 3166-1 alpha-2 - dung de kiem tra tinh kha thi khi dieu phoi
+  // KTV onsite (vd 'VN'). Voi Remote Engineer, truong nay chi la thong tin tham khao.
+  @Column({ default: 'VN' })
+  country: string;
+
+  // true = Remote Engineer (ho tro tu xa, khong bi rang buoc quoc gia/tinh thanh)
+  // false = KTV onsite (bat buoc cung quoc gia moi kha thi ve mat vat ly)
+  @Column({ name: 'is_remote', default: false })
+  isRemote: boolean;
+
   // Chuan bi san cho AI Dispatcher (Giai doan 3) - vd: [{ skill: 'mainboard', level: 5 }]
   // MariaDB dung 'json' (khong co 'jsonb' nhu Postgres); gia tri mac dinh xu ly o tang service
   @Column({ type: 'json', nullable: true })
