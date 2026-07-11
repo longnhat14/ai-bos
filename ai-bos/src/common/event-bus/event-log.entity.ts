@@ -12,12 +12,12 @@ export class EventLog extends TenantBaseEntity {
   @Column({ name: 'event_type' })
   eventType: string; // vd: 'ticket.created', 'ticket.closed'
 
-  @Column({ type: 'jsonb' })
+  @Column({ type: 'json' })
   payload: Record<string, any>;
 
   @Column({ type: 'varchar', default: EventLogStatus.PENDING })
   status: EventLogStatus;
 
-  @Column({ name: 'published_at', type: 'timestamptz', nullable: true })
+  @Column({ name: 'published_at', type: 'datetime', nullable: true })
   publishedAt: Date | null;
 }

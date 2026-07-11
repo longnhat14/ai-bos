@@ -1,8 +1,10 @@
 # AI BOS Backend – Sprint 1 (Tuần 1-2): Platform Core + Ticket + CRM
 
 Đây là khung code khởi động cho **Tuần 1** trong kế hoạch 4 tuần của AI BOS:
-Auth (JWT, 2 vai trò Admin/Technician) + Database (PostgreSQL, có `tenant_id` mọi bảng) +
+Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
 Event Bus (Redis/BullMQ + outbox pattern) + Ticket module (đầy đủ vòng đời) + Customer (CRM tối giản).
+
+> **Lưu ý:** Ban đầu dự án dùng PostgreSQL, đã chuyển sang **MariaDB** để khớp với hosting thực tế (không hỗ trợ PostgreSQL). Yêu cầu MariaDB 10.7+ để dùng `DEFAULT (UUID())` — xem ghi chú cuối file `src/database/schema.sql` nếu hosting dùng bản cũ hơn.
 
 Đã build thử và **không có lỗi biên dịch TypeScript**.
 
@@ -29,7 +31,9 @@ npm run start:dev
 
 Server sẽ chạy tại `http://localhost:3000`.
 
-> Lưu ý: `docker-compose.yml` đã tự động chạy `src/database/schema.sql` khi khởi tạo container Postgres lần đầu (tạo bảng + seed tenant `pctech`). Nếu bạn đã chạy `docker compose up` trước đó và đổi schema, cần xóa volume cũ: `docker compose down -v` rồi `docker compose up -d` lại.
+> Lưu ý: `docker-compose.yml` đã tự động chạy `src/database/schema.sql` khi khởi tạo container MariaDB lần đầu (tạo bảng + seed tenant `pctech`). Nếu bạn đã chạy `docker compose up` trước đó và đổi schema, cần xóa volume cũ: `docker compose down -v` rồi `docker compose up -d` lại.
+>
+> **Khi deploy lên hosting thật (không dùng Docker):** import `src/database/schema.sql` trực tiếp vào MariaDB trên hosting qua phpMyAdmin/Adminer hoặc lệnh `mysql -u <user> -p ai_bos < src/database/schema.sql`.
 
 ## 3. Test nhanh bằng curl
 

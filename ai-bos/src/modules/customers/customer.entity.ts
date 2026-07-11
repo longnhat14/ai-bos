@@ -22,6 +22,6 @@ export class Customer extends TenantBaseEntity {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
-  @Column({ name: 'customer_score', type: 'numeric', precision: 5, scale: 2, default: 0 })
+  @Column({ name: 'customer_score', type: 'decimal', precision: 5, scale: 2, default: 0 })
   customerScore: number;
 }

@@ -25,13 +25,14 @@ export class User extends TenantBaseEntity {
   phone: string;
 
   // Chuan bi san cho AI Dispatcher (Giai doan 3) - vd: [{ skill: 'mainboard', level: 5 }]
-  @Column({ type: 'jsonb', default: [] })
+  // MariaDB dung 'json' (khong co 'jsonb' nhu Postgres); gia tri mac dinh xu ly o tang service
+  @Column({ type: 'json', nullable: true })
   skills: { skill: string; level: number }[];
 
   @Column({ name: 'is_available', default: true })
   isAvailable: boolean;
 
-  @Column({ type: 'numeric', precision: 3, scale: 2, default: 5.0 })
+  @Column({ type: 'decimal', precision: 3, scale: 2, default: 5.0 })
   rating: number;
 
   @Column({ name: 'is_active', default: true })

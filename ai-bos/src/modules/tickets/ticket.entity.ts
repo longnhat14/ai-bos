@@ -47,18 +47,21 @@ export class Ticket extends TenantBaseEntity {
   priority: TicketPriority;
 
   // Dung cho AI Dispatcher sau nay, vd: ["mainboard"]
-  @Column({ name: 'skill_required', type: 'jsonb', default: [] })
+  // MariaDB dung 'json' (khong co 'jsonb'); gia tri mac dinh xu ly o tang service (TicketsService)
+  @Column({ name: 'skill_required', type: 'json', nullable: true })
   skillRequired: string[];
 
-  @Column({ name: 'quoted_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({ name: 'quoted_price', type: 'decimal', precision: 12, scale: 2, nullable: true })
   quotedPrice: number | null;
 
-  @Column({ name: 'final_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({ name: 'final_price', type: 'decimal', precision: 12, scale: 2, nullable: true })
   finalPrice: number | null;
 
-  @Column({ name: 'sla_due_at', type: 'timestamptz', nullable: true })
+  // MariaDB khong co 'timestamptz' nhu Postgres, dung 'datetime' (khong luu timezone,
+  // nen server nen chay o 1 mui gio co dinh, vd Asia/Ho_Chi_Minh)
+  @Column({ name: 'sla_due_at', type: 'datetime', nullable: true })
   slaDueAt: Date | null;
 
-  @Column({ name: 'closed_at', type: 'timestamptz', nullable: true })
+  @Column({ name: 'closed_at', type: 'datetime', nullable: true })
   closedAt: Date | null;
 }

@@ -25,9 +25,9 @@ import { NotificationProcessor } from './common/event-bus/notification.processor
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        type: 'postgres',
+        type: 'mariadb',
         host: config.get('DB_HOST', 'localhost'),
-        port: config.get<number>('DB_PORT', 5432),
+        port: config.get<number>('DB_PORT', 3306),
         username: config.get('DB_USER', 'ai_bos'),
         password: config.get('DB_PASSWORD', 'ai_bos_password'),
         database: config.get('DB_NAME', 'ai_bos'),

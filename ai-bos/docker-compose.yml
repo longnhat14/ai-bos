@@ -1,19 +1,19 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: ai-bos-postgres
+  mariadb:
+    image: mariadb:11
+    container_name: ai-bos-mariadb
     environment:
-      POSTGRES_USER: ai_bos
-      POSTGRES_PASSWORD: ai_bos_password
-      POSTGRES_DB: ai_bos
+      MARIADB_USER: ai_bos
+      MARIADB_PASSWORD: ai_bos_password
+      MARIADB_DATABASE: ai_bos
+      MARIADB_ROOT_PASSWORD: root_password_doi_truoc_khi_dung_that
     ports:
-      - '5432:5432'
+      - '3306:3306'
     volumes:
-      - ai_bos_pg_data:/var/lib/postgresql/data
-      - ./src/database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
-
+      - ai_bos_db_data:/var/lib/mysql
+      
   redis:
     image: redis:7-alpine
     container_name: ai-bos-redis
@@ -21,4 +21,4 @@ services:
       - '6379:6379'
 
 volumes:
-  ai_bos_pg_data:
+  ai_bos_db_data:
