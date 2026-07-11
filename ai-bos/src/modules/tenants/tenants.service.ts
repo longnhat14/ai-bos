@@ -11,6 +11,11 @@ export class TenantsService implements OnModuleInit {
 
   constructor(@InjectRepository(Tenant) private readonly tenantRepo: Repository<Tenant>) {}
 
+  /**
+   * Tu dong tao tenant mac dinh (pctech) khi app khoi dong lan dau,
+   * thay the cho dong INSERT seed truoc day nam trong schema.sql
+   * (schema.sql gio chi con dung de tham khao/import thu cong len hosting that).
+   */
   async onModuleInit() {
     const existing = await this.tenantRepo.findOne({ where: { code: DEFAULT_TENANT_CODE } });
     if (!existing) {

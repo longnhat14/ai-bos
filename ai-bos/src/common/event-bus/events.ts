@@ -14,7 +14,17 @@ export enum EventType {
   // Customer
   CUSTOMER_CREATED = 'customer.created',
 
-  // (Se bo sung tiep o Sprint 5-8: order.created, invoice.created, warranty.expiring...)
+  // Warehouse (Sprint 6)
+  INVENTORY_ITEM_CREATED = 'inventory.item_created',
+  INVENTORY_STOCK_ADJUSTED = 'inventory.stock_adjusted',
+  INVENTORY_LOW_STOCK = 'inventory.low_stock',
+  TICKET_PART_USED = 'ticket.part_used',
+
+  // Invoice (Sprint 7)
+  INVOICE_CREATED = 'invoice.created',
+  INVOICE_PAID = 'invoice.paid',
+
+  // (Se bo sung tiep: warranty.expiring...)
 }
 
 export interface BaseEventPayload {

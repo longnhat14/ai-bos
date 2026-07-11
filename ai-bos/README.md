@@ -1,10 +1,13 @@
-# AI BOS Backend – Sprint 1 (Tuần 1-2): Platform Core + Ticket + CRM
+# AI BOS Backend – Sprint 1-2: Platform Core + Ticket + CRM + Kho + Invoice
 
-Đây là khung code khởi động cho **Tuần 1** trong kế hoạch 4 tuần của AI BOS:
+Đây là khung code cho **Tuần 1 + Tuần 2** trong kế hoạch 4 tuần của AI BOS:
 Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
-Event Bus (Redis/BullMQ + outbox pattern) + Ticket module (đầy đủ vòng đời) + Customer (CRM tối giản).
+Event Bus (Redis/BullMQ + outbox pattern) + Ticket module (đầy đủ vòng đời) + Customer (CRM tối giản) +
+**Kho (Warehouse)** + **Invoice (tự động sinh hóa đơn khi đóng ticket)**.
 
 > **Lưu ý:** Ban đầu dự án dùng PostgreSQL, đã chuyển sang **MariaDB** để khớp với hosting thực tế (không hỗ trợ PostgreSQL). Yêu cầu MariaDB 10.7+ để dùng `DEFAULT (UUID())` — xem ghi chú cuối file `src/database/schema.sql` nếu hosting dùng bản cũ hơn.
+
+> **Quan trọng về kiến trúc Event Bus:** Ban đầu mỗi module tự đăng ký `@Processor` riêng trên cùng 1 queue BullMQ — đây là lỗi, vì BullMQ hoạt động theo kiểu "competing consumers" (nhiều Processor cùng 1 queue sẽ giành nhau xử lý job, không phải cùng nhận được). Đã sửa: chỉ còn **1 `EventDispatcherProcessor` duy nhất** (`src/common/event-bus/event-dispatcher.processor.ts`), nó gọi tuần tự tới các Service thuần (`NotificationService`, `InvoiceEventHandler`...) theo loại event. Khi thêm module mới cần lắng nghe event, chỉ cần thêm 1 dòng trong `EventDispatcherProcessor`, không đụng đến code nghiệp vụ gốc.
 
 Đã build thử và **không có lỗi biên dịch TypeScript**.
 
@@ -68,6 +71,50 @@ curl -X POST http://localhost:3000/api/v1/tickets \
 ```
 
 Xem log terminal, bạn sẽ thấy dòng `[Notification] Ticket moi da tao: PCT-2026-0001` — đây là bằng chứng **Event Bus đang hoạt động**: TicketsService không hề gọi trực tiếp NotificationProcessor, mà chỉ phát event `ticket.created`, và Processor tự lắng nghe.
+
+### Test Kho (Warehouse) + Invoice tự động
+
+**Tạo 1 linh kiện trong kho:**
+```bash
+curl -X POST http://localhost:3000/api/v1/warehouse/items \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer TOKEN" \
+  -d '{"sku":"RAM-8GB-DDR4","name":"RAM 8GB DDR4","unit":"cai","quantityOnHand":10,"lowStockThreshold":3,"costPrice":500000,"sellPrice":700000}'
+```
+Lưu lại `id` linh kiện vừa tạo.
+
+**Dùng linh kiện đó cho ticket (thay `TICKET_ID` và `ITEM_ID`):**
+```bash
+curl -X POST http://localhost:3000/api/v1/warehouse/tickets/TICKET_ID/parts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer TOKEN" \
+  -d '{"inventoryItemId":"ITEM_ID","quantity":1}'
+```
+Kiểm tra lại tồn kho đã trừ đúng: `GET /api/v1/warehouse/items/ITEM_ID` → `quantityOnHand` phải giảm 1.
+
+**Đóng ticket để test Invoice tự động sinh ra** (ticket cần đi qua đủ các bước trạng thái hợp lệ trước, hoặc test nhanh bằng cách báo giá rồi chuyển thẳng qua các bước):
+```bash
+# Chuyen qua tung buoc: diagnosing -> quoted (kem gia) -> confirmed -> repairing -> testing -> closed
+curl -X PATCH http://localhost:3000/api/v1/tickets/TICKET_ID/status -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" -d '{"status":"diagnosing"}'
+curl -X PATCH http://localhost:3000/api/v1/tickets/TICKET_ID/quote -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" -d '{"quotedPrice":900000}'
+curl -X PATCH http://localhost:3000/api/v1/tickets/TICKET_ID/status -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" -d '{"status":"confirmed"}'
+curl -X PATCH http://localhost:3000/api/v1/tickets/TICKET_ID/status -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" -d '{"status":"repairing"}'
+curl -X PATCH http://localhost:3000/api/v1/tickets/TICKET_ID/status -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" -d '{"status":"testing"}'
+curl -X PATCH http://localhost:3000/api/v1/tickets/TICKET_ID/status -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" -d '{"status":"closed"}'
+```
+
+Sau bước cuối, xem log terminal sẽ thấy:
+```
+[Notification] Ticket da dong: PCT-2026-0001
+Da tu dong sinh hoa don INV-2026-0001 cho ticket ...
+[Notification] Hoa don INV-2026-0001 da duoc tao, tong tien: 900000
+```
+
+Kiểm tra hóa đơn vừa tạo:
+```bash
+curl http://localhost:3000/api/v1/invoices/by-ticket/TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+Sẽ thấy `partsAmount` (từ linh kiện RAM đã dùng = 700000) và `laborAmount` = 900000 - 700000 = 200000.
 
 ## 4. Cấu trúc thư mục
 

@@ -3,8 +3,13 @@
 -- Phien ban: MariaDB (chuyen doi tu PostgreSQL de khop voi hosting)
 -- Nguyen tac: moi bang co tenant_id de san sang cho multi-tenant (Giai doan 4)
 --
+-- LUU Y QUAN TRONG:
+-- File nay CHI dung khi import thu cong len hosting production that (khong dung Docker).
+-- O moi truong dev local (qua docker-compose), TypeORM tu tao schema qua "synchronize: true"
+-- (xem app.module.ts) - KHONG chay file nay cung luc voi synchronize, se bi xung dot
+-- (loi "Foreign key constraint is incorrectly formed" khi TypeORM co gang sua lai schema).
+--
 -- Yeu cau: MariaDB 10.7+ (de dung DEFAULT (UUID()) cho primary key).
--- Neu hosting dung ban MariaDB cu hon 10.7, xem ghi chu o cuoi file.
 -- ============================================================
 
 SET NAMES utf8mb4;

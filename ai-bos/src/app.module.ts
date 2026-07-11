@@ -8,14 +8,20 @@ import { User } from './modules/users/user.entity';
 import { Customer } from './modules/customers/customer.entity';
 import { Ticket } from './modules/tickets/ticket.entity';
 import { TicketStatusHistory } from './modules/tickets/ticket-status-history.entity';
+import { InventoryItem } from './modules/warehouse/inventory-item.entity';
+import { TicketPart } from './modules/warehouse/ticket-part.entity';
+import { Invoice } from './modules/invoice/invoice.entity';
 import { EventLog } from './common/event-bus/event-log.entity';
 
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
+import { WarehouseModule } from './modules/warehouse/warehouse.module';
+import { InvoiceModule } from './modules/invoice/invoice.module';
+import { NotificationModule } from './modules/notification/notification.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
-import { NotificationProcessor } from './common/event-bus/notification.processor';
+import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.processor';
 
 @Module({
   imports: [
@@ -31,7 +37,17 @@ import { NotificationProcessor } from './common/event-bus/notification.processor
         username: config.get('DB_USER', 'ai_bos'),
         password: config.get('DB_PASSWORD', 'ai_bos_password'),
         database: config.get('DB_NAME', 'ai_bos'),
-        entities: [Tenant, User, Customer, Ticket, TicketStatusHistory, EventLog],
+        entities: [
+          Tenant,
+          User,
+          Customer,
+          Ticket,
+          TicketStatusHistory,
+          InventoryItem,
+          TicketPart,
+          Invoice,
+          EventLog,
+        ],
         synchronize: config.get('NODE_ENV') === 'development', // CHI true khi dev, production dung migration
         logging: config.get('NODE_ENV') === 'development',
       }),
@@ -52,8 +68,14 @@ import { NotificationProcessor } from './common/event-bus/notification.processor
     AuthModule,
     CustomersModule,
     TicketsModule,
+    WarehouseModule,
+    InvoiceModule,
+    NotificationModule,
     EventBusModule,
   ],
-  providers: [NotificationProcessor],
+  // EventDispatcherProcessor la DUY NHAT noi dang ky @Processor('ai-bos-events').
+  // No can NotificationModule + InvoiceModule da import o tren de lay duoc
+  // NotificationService va InvoiceEventHandler qua Dependency Injection.
+  providers: [EventDispatcherProcessor],
 })
 export class AppModule {}

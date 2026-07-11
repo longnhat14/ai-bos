@@ -13,7 +13,7 @@ services:
       - '3306:3306'
     volumes:
       - ai_bos_db_data:/var/lib/mysql
-      
+
   redis:
     image: redis:7-alpine
     container_name: ai-bos-redis
