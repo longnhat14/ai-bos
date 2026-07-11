@@ -16,6 +16,7 @@ import { Order } from './modules/shop/order.entity';
 import { OrderItem } from './modules/shop/order-item.entity';
 import { Conversation } from './modules/chat/conversation.entity';
 import { ChatMessage } from './modules/chat/chat-message.entity';
+import { PriceCatalog } from './modules/pricing/price-catalog.entity';
 import { EventLog } from './common/event-bus/event-log.entity';
 
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -30,6 +31,7 @@ import { ShopModule } from './modules/shop/shop.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { DispatcherModule } from './modules/dispatcher/dispatcher.module';
+import { PricingModule } from './modules/pricing/pricing.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ChannelsModule } from './common/channels/channels.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
@@ -63,6 +65,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
           OrderItem,
           Conversation,
           ChatMessage,
+          PriceCatalog,
           EventLog,
         ],
         synchronize: config.get('NODE_ENV') === 'development', // CHI true khi dev, production dung migration
@@ -93,6 +96,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     DashboardModule,
     ChatModule,
     DispatcherModule,
+    PricingModule,
     NotificationModule,
     ChannelsModule,
     EventBusModule,

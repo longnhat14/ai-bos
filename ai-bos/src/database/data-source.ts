@@ -14,6 +14,7 @@ import { Order } from '../modules/shop/order.entity';
 import { OrderItem } from '../modules/shop/order-item.entity';
 import { Conversation } from '../modules/chat/conversation.entity';
 import { ChatMessage } from '../modules/chat/chat-message.entity';
+import { PriceCatalog } from '../modules/pricing/price-catalog.entity';
 import { EventLog } from '../common/event-bus/event-log.entity';
 
 dotenv.config();
@@ -39,6 +40,7 @@ export const AppDataSource = new DataSource({
     OrderItem,
     Conversation,
     ChatMessage,
+    PriceCatalog,
     EventLog,
   ],
   migrations: ['src/database/migrations/*.ts'],

@@ -1,4 +1,4 @@
-# AI BOS Backend – Sprint 1-2 + Chat Auto-Translate + AI Dispatcher (Sprint 9)
+# AI BOS Backend – Sprint 1-2 + Chat Auto-Translate + AI Dispatcher + AI Pricing
 
 Đây là khung code cho **Tuần 1 + Tuần 2** trong kế hoạch 4 tuần của AI BOS:
 Auth (JWT, 2 vai trò Admin/Technician) + Database (MariaDB, có `tenant_id` mọi bảng) +
@@ -310,6 +310,42 @@ curl http://localhost:3000/api/v1/dispatcher/suggest/TICKET_ID -H "Authorization
 Kết quả mong đợi: Remote Engineer X **vẫn xuất hiện trong danh sách đề xuất** dù khác quốc gia với khách (VN vs SG) — vì `isRemote: true` không bị áp dụng luật "phải cùng quốc gia".
 
 **Đối chứng:** nếu tạo thêm 1 KTV onsite (`isRemote: false`, `country: "VN"`) và thử đề xuất cho cùng ticket khách Singapore này, KTV onsite đó sẽ **không xuất hiện trong danh sách** — vì bị loại ngay từ đầu (khác quốc gia + không phải remote = không khả thi vật lý).
+
+### Test AI Pricing (Sprint 10)
+
+**Bước 1 – Tạo bảng giá công sửa theo kỹ năng:**
+```bash
+curl -X POST http://localhost:3000/api/v1/pricing/catalog -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"skillCode":"mainboard","description":"Sua loi mainboard","laborPrice":300000}'
+curl -X POST http://localhost:3000/api/v1/pricing/catalog -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"skillCode":"data-recovery","description":"Cuu du lieu o cung/SSD","laborPrice":500000}'
+```
+
+**Bước 2 – Tạo ticket cần cả 2 kỹ năng trên:**
+```bash
+curl -X POST http://localhost:3000/api/v1/tickets -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"customerId":"CUSTOMER_ID","issueDescription":"May khong len nguon, nghi ngo mat du lieu","skillRequired":["mainboard","data-recovery"]}'
+```
+
+**Bước 3 – (Tùy chọn) Dùng thêm linh kiện cho ticket** (dùng lại `ITEM_ID` RAM đã tạo ở phần Kho):
+```bash
+curl -X POST http://localhost:3000/api/v1/warehouse/tickets/TICKET_ID/parts -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"inventoryItemId":"ITEM_ID","quantity":1}'
+```
+
+**Bước 4 – Xem AI Pricing đề xuất báo giá:**
+```bash
+curl http://localhost:3000/api/v1/pricing/suggest/TICKET_ID -H "Authorization: Bearer TOKEN"
+```
+Kết quả mong đợi: `laborTotal = 800000` (300.000 + 500.000), `partsAmount = 700000` (nếu đã làm Bước 3), `suggestedTotal = 1500000`, `missingSkills: []`.
+
+**Test trường hợp thiếu giá:** tạo ticket với `skillRequired: ["network"]` (chưa có trong bảng giá) — `missingSkills` sẽ trả về `["network"]` và `laborTotal` không tính phần này, để nhân viên biết cần tự bổ sung giá thủ công thay vì tin vào con số thiếu.
+
+**Áp dụng báo giá vào ticket** (nhân viên xác nhận, không tự động):
+```bash
+curl -X PATCH http://localhost:3000/api/v1/tickets/TICKET_ID/quote -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"quotedPrice":1500000}'
+```
 
 ## 4. Cấu trúc thư mục
 
