@@ -43,6 +43,7 @@ import { DiagnosticModule } from './modules/diagnostic/diagnostic.module';
 import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
+import { ZaloModule } from './modules/zalo/zalo.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
 import { WebChatModule } from './modules/webchat/webchat.module';
 import { SettingsModule } from './modules/settings/settings.module';
@@ -122,6 +123,7 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     KnowledgeModule,
     SalesModule,
     WhatsAppModule,
+    ZaloModule,
     TelegramModule,
     WebChatModule,
     SettingsModule,

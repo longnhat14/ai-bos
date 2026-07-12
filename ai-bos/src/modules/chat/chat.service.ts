@@ -9,6 +9,7 @@ import { ActiveChannelType, TelegramBinding } from '../telegram/telegram-binding
 import { TelegramChannel } from '../telegram/telegram-channel.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { WhatsAppChannel } from '../whatsapp/whatsapp-channel.service';
+import { ZaloChannel } from '../zalo/zalo-channel.service';
 import { ChatMessage, SenderType } from './chat-message.entity';
 import { Conversation, ConversationChannel } from './conversation.entity';
 import { CreateConversationDto, SendMessageDto } from './dto/chat.dto';
@@ -31,6 +32,7 @@ export class ChatService {
     private readonly tenantsService: TenantsService,
     private readonly translationService: TranslationService,
     @Inject(forwardRef(() => WhatsAppChannel)) private readonly whatsAppChannel: WhatsAppChannel,
+    @Inject(forwardRef(() => ZaloChannel)) private readonly zaloChannel: ZaloChannel,
     @Inject(forwardRef(() => TelegramChannel)) private readonly telegramChannel: TelegramChannel,
     private readonly eventBus: EventBusService,
   ) {}
@@ -94,6 +96,39 @@ export class ChatService {
     return this.conversationRepo.save(conversation);
   }
 
+  /**
+   * Dung boi ZaloWebhookController khi co tin nhan Zalo MOI den - tu dong tao
+   * 1 conversation voi channel = zalo. Khac WhatsApp (mac dinh dich cho RemoteIT),
+   * Zalo mac dinh KHONG dich (khach Viet Nam, khong can dich) - dung nguyen tac
+   * kien truc kenh da thong nhat: "Zalo OA: khach hang Viet Nam".
+   */
+  async findOrCreateForZalo(
+    tenantId: string,
+    customerId: string,
+    zaloUserId: string,
+  ): Promise<Conversation> {
+    const existing = await this.conversationRepo.findOne({
+      where: {
+        tenantId,
+        customerId,
+        channel: ConversationChannel.ZALO,
+        externalContactId: zaloUserId,
+      },
+    });
+    if (existing) return existing;
+
+    const conversation = this.conversationRepo.create({
+      tenantId,
+      customerId,
+      customerLanguage: 'vi', // khach Zalo mac dinh tieng Viet
+      staffLanguage: 'vi',
+      autoTranslateEnabled: false, // mac dinh TAT - PCTech co the bat rieng qua enableAutoTranslate neu gap khach nuoc ngoai
+      channel: ConversationChannel.ZALO,
+      externalContactId: zaloUserId,
+    });
+    return this.conversationRepo.save(conversation);
+  }
+
   async findConversation(tenantId: string, id: string): Promise<Conversation> {
     const conversation = await this.conversationRepo.findOne({ where: { tenantId, id } });
     if (!conversation) throw new NotFoundException('Khong tim thay cuoc hoi thoai');
@@ -110,7 +145,10 @@ export class ChatService {
     staffUserId: string,
   ): Promise<Conversation> {
     const candidates = await this.conversationRepo.find({
-      where: { tenantId, channel: ConversationChannel.WHATSAPP },
+      where: [
+        { tenantId, channel: ConversationChannel.WHATSAPP },
+        { tenantId, channel: ConversationChannel.ZALO },
+      ],
     });
     const matched = candidates.find((c) => c.id.startsWith(shortId) && !c.assignedStaffId);
 
@@ -213,21 +251,28 @@ export class ChatService {
       senderType: dto.senderType,
     });
 
-    // Neu la tin nhan cua staff tren 1 cuoc hoi thoai WhatsApp -> gui THAT ra ngoai cho khach
-    if (
-      !isFromCustomer &&
-      conversation.channel === ConversationChannel.WHATSAPP &&
-      conversation.externalContactId
-    ) {
-      await this.whatsAppChannel.send(
-        { externalId: conversation.externalContactId },
-        { text: translatedText },
-      );
+    // Neu la tin nhan cua staff tren 1 cuoc hoi thoai kenh ngoai (WhatsApp/Zalo) -> gui THAT ra ngoai cho khach
+    if (!isFromCustomer && conversation.externalContactId) {
+      if (conversation.channel === ConversationChannel.WHATSAPP) {
+        await this.whatsAppChannel.send(
+          { externalId: conversation.externalContactId },
+          { text: translatedText },
+        );
+      } else if (conversation.channel === ConversationChannel.ZALO) {
+        await this.zaloChannel.send(
+          { externalId: conversation.externalContactId },
+          { text: translatedText },
+        );
+      }
     }
 
-    // Canh bao qua Telegram khi khach nhan tin (CHI ap dung kenh WhatsApp - kenh
-    // nay khong co AI tu tra loi nhu WebChat, nen luon can nguoi that xu ly):
-    if (isFromCustomer && conversation.channel === ConversationChannel.WHATSAPP) {
+    // Canh bao qua Telegram khi khach nhan tin (CHI ap dung kenh ben ngoai - WhatsApp/Zalo -
+    // vi cac kenh nay khong co AI tu tra loi nhu WebChat, nen luon can nguoi that xu ly):
+    const isExternalChannel =
+      conversation.channel === ConversationChannel.WHATSAPP ||
+      conversation.channel === ConversationChannel.ZALO;
+
+    if (isFromCustomer && isExternalChannel) {
       if (!conversation.assignedStaffId) {
         // Chua ai "nhan xu ly" cuoc hoi thoai nay - bao NGAY cho TAT CA nhan vien
         // da lien ket Telegram cua tenant, kem lenh /claim de nhan xu ly.
@@ -237,7 +282,8 @@ export class ChatService {
         await this.escalationQueue.add(
           'check-response',
           {
-            entityType: 'whatsapp',
+            entityType: 'whatsapp', // dung chung nhan nay cho ca WhatsApp va Zalo - xem ghi chu trong webchat-escalation.processor.ts
+            channelLabel: conversation.channel === ConversationChannel.ZALO ? 'Zalo' : 'WhatsApp',
             tenantId,
             sessionId: conversationId,
             customerMessageId: message.id,
@@ -259,13 +305,14 @@ export class ChatService {
   ): Promise<void> {
     const bindings = await this.telegramBindingRepo.find({ where: { tenantId } });
     if (bindings.length === 0) {
-      this.logger.warn(`Khong co Telegram binding nao de bao khach WhatsApp moi (tenant ${tenantId})`);
+      this.logger.warn(`Khong co Telegram binding nao de bao khach moi (tenant ${tenantId})`);
       return;
     }
 
+    const channelLabel = conversation.channel === ConversationChannel.ZALO ? 'Zalo' : 'WhatsApp';
     const shortId = conversation.id.slice(0, 8);
     const alertText =
-      `📲 <b>Khách WhatsApp mới nhắn, chưa ai nhận xử lý!</b>\n\n` +
+      `📲 <b>Khách ${channelLabel} mới nhắn, chưa ai nhận xử lý!</b>\n\n` +
       `Tin nhắn: "${customerText}"\n\n` +
       `👉 Gõ <code>/claim ${shortId}</code> để nhận xử lý cuộc hội thoại này.`;
 

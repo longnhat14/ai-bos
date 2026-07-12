@@ -6,6 +6,7 @@ import { TelegramBinding } from '../telegram/telegram-binding.entity';
 import { TelegramModule } from '../telegram/telegram.module';
 import { TenantsModule } from '../tenants/tenants.module';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
+import { ZaloModule } from '../zalo/zalo.module';
 import { ChatMessage } from './chat-message.entity';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
@@ -20,6 +21,7 @@ import { TranslationService } from './translation.service';
     EventBusModule,
     forwardRef(() => WhatsAppModule),
     forwardRef(() => TelegramModule),
+    forwardRef(() => ZaloModule),
   ],
   controllers: [ChatController],
   providers: [ChatService, TranslationService],

@@ -888,6 +888,29 @@ Bot xác nhận: `✅ Đã nhận xử lý, bạn là khách số 1.`
 
 **Kiểm tra dịch hoạt động đúng** — trả lời bằng tiếng Việt qua Telegram, kiểm tra khách WhatsApp thật nhận được bản tiếng Anh đã dịch (giống hệt cách test đã làm ở phần WhatsApp Business API phía trên).
 
+### Cài đặt Zalo OA (khách hàng Việt Nam, chủ yếu PCTech)
+
+**Lưu ý quan trọng:** Zalo OA API của bên thứ ba có thể thay đổi theo thời gian — code đã viết theo tài liệu phổ biến nhất, **bắt buộc kiểm tra lại với tài liệu Zalo Developers mới nhất** trước khi dùng thật, đặc biệt phần xác thực chữ ký (`mac`).
+
+**Bước 1 – Tạo Zalo Official Account + đăng ký ứng dụng:**
+1. Vào https://developers.zalo.me, tạo ứng dụng mới, liên kết với 1 Zalo OA
+2. Lấy **App Secret** trong phần cài đặt ứng dụng
+3. Lấy **OA Access Token** qua luồng OAuth của Zalo (cần refresh định kỳ)
+
+**Bước 2 – Cấu hình `.env`:**
+```
+ZALO_OA_ACCESS_TOKEN=<access_token>
+ZALO_APP_SECRET=<app_secret>
+ZALO_TENANT_CODE=pctech
+```
+
+**Bước 3 – Đăng ký Webhook URL** trong Zalo Developers Console:
+```
+https://xxxx.ngrok-free.app/webhooks/zalo
+```
+
+**Bước 4 – Test bằng cách nhắn tin thật vào Zalo OA** (từ điện thoại), hoặc mô phỏng qua API — dùng chung toàn bộ cơ chế `/claim`, `/ds`, `/s <số>`, cảnh báo 15s đã test với WhatsApp, chỉ khác: **Zalo mặc định KHÔNG dịch tự động** (khách Việt Nam), trong khi WhatsApp mặc định CÓ dịch (khách quốc tế). Nếu PCTech gặp khách nước ngoài qua Zalo, có thể bật dịch riêng bằng cách gọi `POST /chat/conversations` với `enableAutoTranslate: true` trước khi liên kết webhook (tùy biến thêm nếu cần).
+
 ## 4. Cấu trúc thư mục
 
 ```
