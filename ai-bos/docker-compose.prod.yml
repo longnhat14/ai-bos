@@ -1,0 +1,64 @@
+# Dung file nay khi TRIEN KHAI THAT (khac voi docker-compose.yml chi chay
+# MariaDB/Redis cho dev, con backend chay rieng qua "npm run start:dev").
+#
+# Cach dung: docker compose -f docker-compose.prod.yml up -d --build
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:11
+    container_name: ai-bos-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_USER: ${DB_USER:-ai_bos}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_DATABASE: ${DB_NAME:-ai_bos}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - ai_bos_db_data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-bos-redis
+    restart: unless-stopped
+    volumes:
+      - ai_bos_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-bos-app
+    restart: unless-stopped
+    # Chay migration TRUOC khi khoi dong app - dam bao schema luon dung ban
+    # moi nhat truoc khi nhan request that (xem huong dan Database Migration).
+    command: sh -c "node_modules/.bin/typeorm migration:run -d dist/database/data-source.js && node dist/main.js"
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      DB_HOST: mariadb
+      REDIS_HOST: redis
+    volumes:
+      - ai_bos_uploads:/app/uploads
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  ai_bos_db_data:
+  ai_bos_redis_data:
+  ai_bos_uploads:

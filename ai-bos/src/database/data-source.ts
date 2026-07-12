@@ -26,6 +26,13 @@ import { EventLog } from '../common/event-bus/event-log.entity';
 
 dotenv.config();
 
+// Tu dong nhan biet dang chay qua ts-node (file .ts, dung luc dev/generate migration)
+// hay ban da compile (file .js trong dist/, dung luc production that su) - de tro
+// dung duong dan migration tuong ung. Neu de co dinh ".ts", khi chay "node dist/..."
+// (khong co ts-node) se KHONG tim thay migration nao (glob khong khop file .js).
+const isCompiled = __filename.endsWith('.js');
+const migrationsGlob = isCompiled ? `${__dirname}/migrations/*.js` : `${__dirname}/migrations/*.ts`;
+
 export const AppDataSource = new DataSource({
   type: 'mariadb',
   host: process.env.DB_HOST || 'localhost',
@@ -57,7 +64,7 @@ export const AppDataSource = new DataSource({
     WebChatMessage,
     EventLog,
   ],
-  migrations: ['src/database/migrations/*.ts'],
+  migrations: [migrationsGlob],
   synchronize: false, // KHONG dung true o production - dung migration
   logging: process.env.NODE_ENV === 'development',
 });

@@ -946,6 +946,34 @@ npm run migration:revert
 
 **Lưu ý quan trọng:** từ giờ **không sửa database production bằng cách chỉnh entity rồi khởi động lại** — mọi thay đổi schema production đều phải qua đúng quy trình 5 bước trên.
 
+## 3.6. Health Check + Dockerfile
+
+**Endpoint `/health`** (không cần JWT — dùng cho hệ thống giám sát/load balancer):
+```bash
+curl http://localhost:3000/health
+```
+Trả về `{"status":"ok","info":{"database":{"status":"up"},"redis":{"status":"up"}}}` — kiểm tra cả DB lẫn Redis còn sống, không chỉ server có phản hồi hay không.
+
+**Dockerfile** (production, multi-stage build — image không chứa `devDependencies`/`ts-node`):
+```bash
+docker build -t ai-bos-backend .
+```
+
+**Triển khai đầy đủ (MariaDB + Redis + App) bằng `docker-compose.prod.yml`** (khác với `docker-compose.yml` hiện tại chỉ chạy DB/Redis cho dev):
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+File này tự động chạy migration **trước khi** khởi động app — đảm bảo schema luôn đúng trước khi nhận request thật.
+
+**Cần tạo file `.env` với các biến sau trước khi chạy `docker-compose.prod.yml`:**
+```
+DB_PASSWORD=<mat_khau_that>
+DB_ROOT_PASSWORD=<mat_khau_root_that>
+JWT_SECRET=<chuoi_bi_mat_that>
+ANTHROPIC_API_KEY=...
+# ... cac bien khac nhu .env.example
+```
+
 ## 4. Cấu trúc thư mục
 
 ```
