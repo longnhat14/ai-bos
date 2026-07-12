@@ -12,9 +12,12 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtPayload } from '../auth/jwt.strategy';
 import { TenantsService } from '../tenants/tenants.service';
+import { UserRole } from '../users/user.entity';
 
 const ALLOWED_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
 const MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024; // 2MB - logo khong can qua nang
@@ -22,12 +25,15 @@ const UPLOAD_DIR = join(process.cwd(), 'uploads', 'branding');
 
 /**
  * Muc "Cai dat" (Settings) - hien tai chi co logo thuong hieu, sau nay co the
- * mo rong them mau sac giao dien, ten hien thi chat widget... Chi Admin duoc
- * phep doi (dung JwtAuthGuard, chua phan biet role rieng - Sprint sau nen
- * gan them @Roles(UserRole.ADMIN) neu muon chat che hon).
+ * mo rong them mau sac giao dien, ten hien thi chat widget...
+ *
+ * BAO MAT: gan RolesGuard o cap Controller (an toan vi RolesGuard tu cho qua
+ * neu endpoint khong khai bao @Roles), roi CHI danh dau @Roles(ADMIN) cho
+ * endpoint sua doi that su (uploadLogo) - endpoint doc (getBranding) van mo
+ * cho ca Technician xem.
  */
 @Controller('api/v1/settings')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class SettingsController {
   constructor(private readonly tenantsService: TenantsService) {}
 
@@ -40,6 +46,7 @@ export class SettingsController {
   }
 
   @Patch('branding/logo')
+  @Roles(UserRole.ADMIN)
   @UseInterceptors(
     FileInterceptor('logo', {
       storage: diskStorage({

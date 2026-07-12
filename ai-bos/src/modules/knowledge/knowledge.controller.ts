@@ -1,16 +1,26 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtPayload } from '../auth/jwt.strategy';
+import { UserRole } from '../users/user.entity';
 import { CreateKnowledgeEntryDto, UpdateKnowledgeEntryDto } from './dto/knowledge.dto';
 import { KnowledgeService } from './knowledge.service';
 
+/**
+ * Luu y: viec KTV xac nhan chan doan dung (DiagnosticService.confirmDiagnosis)
+ * cung goi KnowledgeService.create() nhung goi TRUC TIEP qua service, KHONG qua
+ * controller nay - nen gioi han POST/PATCH o day thanh Admin-only KHONG lam
+ * gian doan luong "KTV xac nhan -> tu dong nuoi Knowledge Base" da thiet ke.
+ */
 @Controller('api/v1/knowledge')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class KnowledgeController {
   constructor(private readonly knowledgeService: KnowledgeService) {}
 
   @Post()
+  @Roles(UserRole.ADMIN)
   create(@CurrentUser() user: JwtPayload, @Body() dto: CreateKnowledgeEntryDto) {
     return this.knowledgeService.create(user.tenantId, dto);
   }
@@ -31,6 +41,7 @@ export class KnowledgeController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.ADMIN)
   update(
     @CurrentUser() user: JwtPayload,
     @Param('id') id: string,

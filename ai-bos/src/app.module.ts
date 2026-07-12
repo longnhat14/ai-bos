@@ -1,6 +1,8 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { Tenant } from './modules/tenants/tenant.entity';
@@ -55,6 +57,12 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+
+    // Rate limiting toan cuc - mac dinh 100 request/60s cho MOI IP. Cac endpoint
+    // nhay cam hon (webchat public, webhook) co the tu dat @Throttle rieng chat
+    // hon o tung controller. Bao ve chinh: endpoint public khong co JWT
+    // (/public/webchat/messages, /webhooks/*) tranh bi spam/DDoS don gian.
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
 
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -134,6 +142,9 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
   // EventDispatcherProcessor la DUY NHAT noi dang ky @Processor('ai-bos-events').
   // No can NotificationModule + InvoiceModule da import o tren de lay duoc
   // NotificationService va InvoiceEventHandler qua Dependency Injection.
-  providers: [EventDispatcherProcessor],
+  providers: [
+    EventDispatcherProcessor,
+    { provide: APP_GUARD, useClass: ThrottlerGuard }, // ap dung rate limit cho TOAN BO endpoint
+  ],
 })
 export class AppModule {}

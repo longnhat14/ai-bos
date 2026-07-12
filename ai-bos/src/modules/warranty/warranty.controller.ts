@@ -1,12 +1,15 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtPayload } from '../auth/jwt.strategy';
+import { UserRole } from '../users/user.entity';
 import { ManualCreateWarrantyDto, VoidWarrantyDto } from './dto/warranty.dto';
 import { WarrantyService } from './warranty.service';
 
 @Controller('api/v1/warranty')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class WarrantyController {
   constructor(private readonly warrantyService: WarrantyService) {}
 
@@ -32,7 +35,10 @@ export class WarrantyController {
     return this.warrantyService.checkActive(user.tenantId, ticketId);
   }
 
+  // Chi Admin duoc HUY bao hanh - day la hanh dong co hau qua ve tai chinh/phap ly
+  // voi khach hang, KHONG the de Technician tu y thuc hien.
   @Patch(':id/void')
+  @Roles(UserRole.ADMIN)
   voidWarranty(
     @CurrentUser() user: JwtPayload,
     @Param('id') id: string,

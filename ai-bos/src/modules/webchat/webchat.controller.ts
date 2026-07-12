@@ -11,6 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -24,8 +25,11 @@ const UPLOAD_DIR = join(process.cwd(), 'uploads', 'webchat');
 
 /**
  * Controller nay KHONG dung JwtAuthGuard - day la endpoint PUBLIC cho khach vang lai
- * tren website (chua dang nhap). Danh tinh khach duoc xac dinh qua sessionId (Sprint
- * sau co the them CAPTCHA/rate-limit de chong spam, hien tai MVP chua lam).
+ * tren website (chua dang nhap). Danh tinh khach duoc xac dinh qua sessionId.
+ *
+ * BAO MAT: endpoint 'messages' goi Claude API that (ton phi) - gioi han rieng
+ * 10 request/60s/IP (chat hon muc mac dinh 100/60s toan he thong) de chong
+ * spam lam ton chi phi API neu bi lam dung.
  */
 @Controller('api/v1/public/webchat')
 export class WebChatController {
@@ -60,6 +64,7 @@ export class WebChatController {
 
   // Gui tin nhan, co the kem 1 anh chup tu camera dien thoai (input capture="environment")
   @Post('messages')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseInterceptors(
     FileInterceptor('image', {
       storage: diskStorage({
