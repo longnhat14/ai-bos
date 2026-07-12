@@ -1,8 +1,12 @@
+import { InjectQueue } from '@nestjs/bullmq';
 import { forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Queue } from 'bullmq';
 import { Repository } from 'typeorm';
 import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { EventType } from '../../common/event-bus/events';
+import { ActiveChannelType, TelegramBinding } from '../telegram/telegram-binding.entity';
+import { TelegramChannel } from '../telegram/telegram-channel.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { WhatsAppChannel } from '../whatsapp/whatsapp-channel.service';
 import { ChatMessage, SenderType } from './chat-message.entity';
@@ -13,6 +17,7 @@ import { TranslationService } from './translation.service';
 // Tenant code duy nhat duoc bat tinh nang dich tu dong theo mac dinh - da thong nhat truoc day:
 // "Mac dinh BAT cho RemoteIT, mac dinh TAT cho PCTech - nhung co the bat rieng tung conversation"
 const AUTO_TRANSLATE_TENANT_CODE = 'remoteit';
+const ESCALATION_DELAY_MS = 15000; // dung chung 15s voi WebChat, xem webchat-escalation.processor.ts
 
 @Injectable()
 export class ChatService {
@@ -21,9 +26,12 @@ export class ChatService {
   constructor(
     @InjectRepository(Conversation) private readonly conversationRepo: Repository<Conversation>,
     @InjectRepository(ChatMessage) private readonly messageRepo: Repository<ChatMessage>,
+    @InjectRepository(TelegramBinding) private readonly telegramBindingRepo: Repository<TelegramBinding>,
+    @InjectQueue('webchat-escalation') private readonly escalationQueue: Queue,
     private readonly tenantsService: TenantsService,
     private readonly translationService: TranslationService,
     @Inject(forwardRef(() => WhatsAppChannel)) private readonly whatsAppChannel: WhatsAppChannel,
+    @Inject(forwardRef(() => TelegramChannel)) private readonly telegramChannel: TelegramChannel,
     private readonly eventBus: EventBusService,
   ) {}
 
@@ -93,6 +101,73 @@ export class ChatService {
   }
 
   /**
+   * Nhan xu ly 1 cuoc hoi thoai WhatsApp CHUA CO AI phu trach, tim theo MA NGAN
+   * (8 ky tu dau cua ID) - vi canh bao Telegram chi hien ma ngan de gon gang.
+   */
+  async claimConversationByShortId(
+    tenantId: string,
+    shortId: string,
+    staffUserId: string,
+  ): Promise<Conversation> {
+    const candidates = await this.conversationRepo.find({
+      where: { tenantId, channel: ConversationChannel.WHATSAPP },
+    });
+    const matched = candidates.find((c) => c.id.startsWith(shortId) && !c.assignedStaffId);
+
+    if (!matched) {
+      throw new NotFoundException(
+        `Không tìm thấy cuộc hội thoại chưa nhận nào khớp với mã "${shortId}".`,
+      );
+    }
+
+    return this.claimConversation(tenantId, matched.id, staffUserId);
+  }
+
+  /**
+   * Nhan vien "nhan xu ly" 1 cuoc hoi thoai WhatsApp qua Telegram - KHAC voi WebChat
+   * (luon co AI xu ly truoc), Conversation KHONG CO AI nen buoc nay BAT BUOC truoc
+   * khi tham gia co che /s <so>. Dung CHUNG bo dem so thu tu voi WebChatSession
+   * (TelegramBinding.nextQueueNumber) - nhan vien chi can nho 1 day so duy nhat.
+   */
+  async claimConversation(tenantId: string, conversationId: string, staffUserId: string): Promise<Conversation> {
+    const conversation = await this.findConversation(tenantId, conversationId);
+
+    let binding = await this.telegramBindingRepo.findOne({ where: { tenantId, userId: staffUserId } });
+    const assignedNumber = binding?.nextQueueNumber ?? 1;
+
+    conversation.assignedStaffId = staffUserId;
+    conversation.queueNumber = assignedNumber;
+    await this.conversationRepo.save(conversation);
+
+    if (binding) {
+      binding.nextQueueNumber = assignedNumber + 1;
+      binding.activeSessionId = conversationId;
+      binding.activeChannelType = ActiveChannelType.WHATSAPP;
+      await this.telegramBindingRepo.save(binding);
+    }
+
+    return conversation;
+  }
+
+  async releaseConversation(tenantId: string, conversationId: string): Promise<Conversation> {
+    const conversation = await this.findConversation(tenantId, conversationId);
+    conversation.assignedStaffId = null;
+    conversation.queueNumber = null;
+    await this.conversationRepo.save(conversation);
+
+    const binding = await this.telegramBindingRepo.findOne({
+      where: { tenantId, activeSessionId: conversationId, activeChannelType: ActiveChannelType.WHATSAPP },
+    });
+    if (binding) {
+      binding.activeSessionId = null;
+      binding.activeChannelType = null;
+      await this.telegramBindingRepo.save(binding);
+    }
+
+    return conversation;
+  }
+
+  /**
    * Gui tin nhan - day la noi xu ly dich tu dong VA gui that ra kenh ben ngoai.
    *
    * Neu conversation.autoTranslateEnabled = false (vd tenant PCTech), tin nhan
@@ -150,7 +225,102 @@ export class ChatService {
       );
     }
 
+    // Canh bao qua Telegram khi khach nhan tin (CHI ap dung kenh WhatsApp - kenh
+    // nay khong co AI tu tra loi nhu WebChat, nen luon can nguoi that xu ly):
+    if (isFromCustomer && conversation.channel === ConversationChannel.WHATSAPP) {
+      if (!conversation.assignedStaffId) {
+        // Chua ai "nhan xu ly" cuoc hoi thoai nay - bao NGAY cho TAT CA nhan vien
+        // da lien ket Telegram cua tenant, kem lenh /claim de nhan xu ly.
+        await this.notifyUnclaimedConversation(tenantId, conversation, dto.text);
+      } else {
+        // Da co nguoi nhan - dat lich kiem tra sau 15s giong het co che cua WebChat.
+        await this.escalationQueue.add(
+          'check-response',
+          {
+            entityType: 'whatsapp',
+            tenantId,
+            sessionId: conversationId,
+            customerMessageId: message.id,
+            customerMessageText: dto.text,
+            customerMessageCreatedAt: message.createdAt.toISOString(),
+          },
+          { delay: ESCALATION_DELAY_MS },
+        );
+      }
+    }
+
     return message;
+  }
+
+  private async notifyUnclaimedConversation(
+    tenantId: string,
+    conversation: Conversation,
+    customerText: string,
+  ): Promise<void> {
+    const bindings = await this.telegramBindingRepo.find({ where: { tenantId } });
+    if (bindings.length === 0) {
+      this.logger.warn(`Khong co Telegram binding nao de bao khach WhatsApp moi (tenant ${tenantId})`);
+      return;
+    }
+
+    const shortId = conversation.id.slice(0, 8);
+    const alertText =
+      `📲 <b>Khách WhatsApp mới nhắn, chưa ai nhận xử lý!</b>\n\n` +
+      `Tin nhắn: "${customerText}"\n\n` +
+      `👉 Gõ <code>/claim ${shortId}</code> để nhận xử lý cuộc hội thoại này.`;
+
+    for (const binding of bindings) {
+      await this.telegramChannel.send({ externalId: binding.telegramChatId }, { text: alertText });
+    }
+  }
+
+  /**
+   * Danh sach cac cuoc hoi thoai WhatsApp nhan vien nay dang phu trach - dung cho /ds.
+   */
+  async findMyConversations(tenantId: string, staffUserId: string): Promise<Conversation[]> {
+    return this.conversationRepo.find({
+      where: { tenantId, assignedStaffId: staffUserId },
+      order: { queueNumber: 'ASC' },
+    });
+  }
+
+  /**
+   * Chon cuoc hoi thoai WhatsApp theo SO THU TU CO DINH (dung chung bo dem voi
+   * WebChatSession) - giong het nguyen tac AIChatService.selectSessionByNumber.
+   */
+  async selectConversationByNumber(
+    tenantId: string,
+    staffUserId: string,
+    queueNumber: number,
+  ): Promise<Conversation> {
+    const conversation = await this.conversationRepo.findOne({
+      where: { tenantId, assignedStaffId: staffUserId, queueNumber },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException(
+        `Không tìm thấy khách WhatsApp số ${queueNumber} trong danh sách bạn phụ trách.`,
+      );
+    }
+
+    const binding = await this.telegramBindingRepo.findOne({ where: { tenantId, userId: staffUserId } });
+    if (binding) {
+      binding.activeSessionId = conversation.id;
+      binding.activeChannelType = ActiveChannelType.WHATSAPP;
+      await this.telegramBindingRepo.save(binding);
+    }
+
+    return conversation;
+  }
+
+  /** Dung boi TelegramWebhookController khi active_channel_type = whatsapp */
+  async getActiveConversationForStaff(tenantId: string, staffUserId: string): Promise<Conversation | null> {
+    const binding = await this.telegramBindingRepo.findOne({ where: { tenantId, userId: staffUserId } });
+    if (!binding?.activeSessionId || binding.activeChannelType !== ActiveChannelType.WHATSAPP) return null;
+
+    return this.conversationRepo.findOne({
+      where: { id: binding.activeSessionId, tenantId, assignedStaffId: staffUserId },
+    });
   }
 
   /**

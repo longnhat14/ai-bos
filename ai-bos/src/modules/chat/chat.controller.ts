@@ -40,4 +40,20 @@ export class ChatController {
   getMessagesForCustomer(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     return this.chatService.getMessagesForCustomer(user.tenantId, id);
   }
+
+  // Nhan vien "nhan xu ly" 1 cuoc hoi thoai WhatsApp - can truoc khi tham gia /s <so> tren Telegram
+  @Post('conversations/:id/claim')
+  claimConversation(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.chatService.claimConversation(user.tenantId, id, user.sub);
+  }
+
+  @Post('conversations/:id/release')
+  releaseConversation(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.chatService.releaseConversation(user.tenantId, id);
+  }
+
+  @Get('my-conversations')
+  findMyConversations(@CurrentUser() user: JwtPayload) {
+    return this.chatService.findMyConversations(user.tenantId, user.sub);
+  }
 }

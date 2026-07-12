@@ -3,28 +3,30 @@ import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Job } from 'bullmq';
 import { MoreThan, Repository } from 'typeorm';
+import { ChatMessage, SenderType } from '../chat/chat-message.entity';
+import { Conversation } from '../chat/conversation.entity';
 import { TelegramBinding } from '../telegram/telegram-binding.entity';
 import { TelegramChannel } from '../telegram/telegram-channel.service';
 import { WebChatMessage, WebChatRole } from './web-chat-message.entity';
 import { WebChatSession } from './web-chat-session.entity';
 
 export interface EscalationJobData {
+  entityType?: 'webchat' | 'whatsapp'; // mac dinh 'webchat' neu khong khai bao (tuong thich nguoc)
   tenantId: string;
-  sessionId: string;
+  sessionId: string; // la WebChatSession.id neu webchat, Conversation.id neu whatsapp
   customerMessageId: string;
   customerMessageText: string;
   customerMessageCreatedAt: string; // ISO string (BullMQ serialize JSON, khong giu duoc Date object)
 }
 
 /**
- * Sau khi nhan vien "gianh quyen" (takeover) 1 phien webchat, neu khach nhan tiep
- * tin nhan MOI ma sau 15 GIAY van chua co nhan vien tra loi, tu dong gui CANH BAO
- * qua Telegram - bien Telegram thanh kenh thong bao thuc te, khong can cho co
- * Admin Frontend that (hien chua xay).
+ * Sau khi nhan vien "gianh quyen"/"claim" 1 phien webchat HOAC cuoc hoi thoai
+ * WhatsApp, neu khach nhan tiep tin nhan MOI ma sau 15 GIAY van chua co nhan vien
+ * tra loi, tu dong gui CANH BAO qua Telegram - bien Telegram thanh kenh thong bao
+ * thuc te, khong can cho co Admin Frontend that (hien chua xay).
  *
- * Day la workaround thuc te cho tinh trang hien tai: nhan vien khong co man hinh
- * nao de "canh" webchat, nen dung Telegram (kenh push notification manh) de bao
- * ngay khi co nguy co bo lo tin nhan khach.
+ * Dung CHUNG 1 processor cho ca 2 loai (phan biet qua job.data.entityType) de
+ * khong lap lai logic kiem tra "da tra loi chua" 2 lan.
  */
 @Processor('webchat-escalation')
 export class WebchatEscalationProcessor extends WorkerHost {
@@ -33,6 +35,8 @@ export class WebchatEscalationProcessor extends WorkerHost {
   constructor(
     @InjectRepository(WebChatSession) private readonly sessionRepo: Repository<WebChatSession>,
     @InjectRepository(WebChatMessage) private readonly messageRepo: Repository<WebChatMessage>,
+    @InjectRepository(Conversation) private readonly conversationRepo: Repository<Conversation>,
+    @InjectRepository(ChatMessage) private readonly chatMessageRepo: Repository<ChatMessage>,
     @InjectRepository(TelegramBinding) private readonly bindingRepo: Repository<TelegramBinding>,
     private readonly telegramChannel: TelegramChannel,
   ) {
@@ -40,13 +44,18 @@ export class WebchatEscalationProcessor extends WorkerHost {
   }
 
   async process(job: Job<EscalationJobData>): Promise<void> {
-    const { tenantId, sessionId, customerMessageText, customerMessageCreatedAt } = job.data;
+    if (job.data.entityType === 'whatsapp') {
+      return this.processWhatsAppEscalation(job.data);
+    }
+    return this.processWebChatEscalation(job.data);
+  }
+
+  private async processWebChatEscalation(data: EscalationJobData): Promise<void> {
+    const { tenantId, sessionId, customerMessageText, customerMessageCreatedAt } = data;
 
     const session = await this.sessionRepo.findOne({ where: { id: sessionId, tenantId } });
     if (!session) return; // phien co the da bi xoa, bo qua
 
-    // Kiem tra: co tin nhan nao cua NHAN VIEN (staffId khac null) tao SAU thoi diem
-    // khach gui tin nhan nay khong? Neu co -> da duoc tra loi, khong can canh bao.
     const staffReplyAfter = await this.messageRepo.findOne({
       where: {
         tenantId,
@@ -57,32 +66,66 @@ export class WebchatEscalationProcessor extends WorkerHost {
     });
 
     if (staffReplyAfter && staffReplyAfter.staffId) {
-      this.logger.log(`Phien ${sessionId} da duoc nhan vien tra loi, khong can canh bao`);
+      this.logger.log(`Phien webchat ${sessionId} da duoc nhan vien tra loi, khong can canh bao`);
       return;
     }
 
-    // Chua co ai tra loi sau 15s - gui canh bao qua Telegram
     const recipients = session.assignedStaffId
       ? await this.bindingRepo.find({ where: { tenantId, userId: session.assignedStaffId } })
-      : await this.bindingRepo.find({ where: { tenantId } }); // fallback: canh bao TAT CA nhan vien da lien ket Telegram
+      : await this.bindingRepo.find({ where: { tenantId } });
 
-    if (recipients.length === 0) {
-      this.logger.warn(
-        `Khong co Telegram binding nao de canh bao cho phien ${sessionId} (tenant ${tenantId})`,
-      );
-      return;
-    }
+    if (recipients.length === 0) return;
 
     const alertText =
-      `⚠️ <b>Khách số ${session.queueNumber ?? '?'} đang chờ phản hồi!</b>\n\n` +
+      `⚠️ <b>Khách số ${session.queueNumber ?? '?'} (Website) đang chờ phản hồi!</b>\n\n` +
       `Tin nhắn khách: "${customerMessageText}"\n\n` +
       `Đã quá 15 giây chưa có ai trả lời.\n` +
-      `👉 Gõ <code>/s ${session.queueNumber}</code> để chuyển sang trả lời khách này ngay (không cần xem danh sách trước).`;
+      `👉 Gõ <code>/s ${session.queueNumber}</code> để trả lời ngay.`;
 
     for (const binding of recipients) {
       await this.telegramChannel.send({ externalId: binding.telegramChatId }, { text: alertText });
     }
+    this.logger.log(`Da gui canh bao Telegram cho phien webchat ${sessionId} toi ${recipients.length} nguoi`);
+  }
 
-    this.logger.log(`Da gui canh bao Telegram cho phien ${sessionId} toi ${recipients.length} nguoi`);
+  private async processWhatsAppEscalation(data: EscalationJobData): Promise<void> {
+    const { tenantId, sessionId: conversationId, customerMessageText, customerMessageCreatedAt } = data;
+
+    const conversation = await this.conversationRepo.findOne({ where: { id: conversationId, tenantId } });
+    if (!conversation) return;
+
+    // Kiem tra: co tin nhan STAFF nao tao SAU thoi diem khach gui tin nay khong?
+    const staffReplyAfter = await this.chatMessageRepo.findOne({
+      where: {
+        tenantId,
+        conversationId,
+        senderType: SenderType.STAFF,
+        createdAt: MoreThan(new Date(customerMessageCreatedAt)),
+      },
+    });
+
+    if (staffReplyAfter) {
+      this.logger.log(`Hoi thoai WhatsApp ${conversationId} da duoc nhan vien tra loi, khong can canh bao`);
+      return;
+    }
+
+    const recipients = conversation.assignedStaffId
+      ? await this.bindingRepo.find({ where: { tenantId, userId: conversation.assignedStaffId } })
+      : await this.bindingRepo.find({ where: { tenantId } });
+
+    if (recipients.length === 0) return;
+
+    const alertText =
+      `⚠️ <b>Khách số ${conversation.queueNumber ?? '?'} (WhatsApp) đang chờ phản hồi!</b>\n\n` +
+      `Tin nhắn khách: "${customerMessageText}"\n\n` +
+      `Đã quá 15 giây chưa có ai trả lời.\n` +
+      `👉 Gõ <code>/s ${conversation.queueNumber}</code> để trả lời ngay.`;
+
+    for (const binding of recipients) {
+      await this.telegramChannel.send({ externalId: binding.telegramChatId }, { text: alertText });
+    }
+    this.logger.log(
+      `Da gui canh bao Telegram cho hoi thoai WhatsApp ${conversationId} toi ${recipients.length} nguoi`,
+    );
   }
 }

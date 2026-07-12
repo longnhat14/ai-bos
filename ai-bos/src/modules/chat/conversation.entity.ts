@@ -44,4 +44,15 @@ export class Conversation extends TenantBaseEntity {
 
   @Column({ type: 'varchar', default: ConversationStatus.OPEN })
   status: ConversationStatus;
+
+  // Nhan vien dang phu trach cuoc hoi thoai nay qua Telegram (null = chua ai nhan xu ly).
+  // Khac voi WebChatSession (luon co AI xu ly truoc), Conversation (WhatsApp) KHONG co AI,
+  // nen can buoc "claim" (nhan xu ly) truoc khi co so thu tu va tham gia co che /s <so>.
+  @Column({ name: 'assigned_staff_id', type: 'uuid', nullable: true })
+  assignedStaffId: string | null;
+
+  // So thu tu CO DINH (dung chung bo dem voi WebChatSession qua TelegramBinding.nextQueueNumber) -
+  // gan luc "claim", KHONG doi sau do - giup /s <so> hoat dong dong nhat cho ca WebChat va WhatsApp.
+  @Column({ name: 'queue_number', type: 'int', nullable: true })
+  queueNumber: number | null;
 }

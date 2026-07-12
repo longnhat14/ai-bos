@@ -1,7 +1,9 @@
 import { BullModule } from '@nestjs/bullmq';
 import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ChatMessage } from '../chat/chat-message.entity';
 import { ChatModule } from '../chat/chat.module';
+import { Conversation } from '../chat/conversation.entity';
 import { CustomersModule } from '../customers/customers.module';
 import { TelegramBinding } from '../telegram/telegram-binding.entity';
 import { TelegramModule } from '../telegram/telegram.module';
@@ -17,13 +19,13 @@ import { WebChatSession } from './web-chat-session.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([WebChatSession, WebChatMessage, TelegramBinding]),
+    TypeOrmModule.forFeature([WebChatSession, WebChatMessage, TelegramBinding, Conversation, ChatMessage]),
     BullModule.registerQueue({ name: 'webchat-escalation' }),
     TenantsModule,
     CustomersModule,
     TicketsModule,
     WarehouseModule,
-    ChatModule,
+    forwardRef(() => ChatModule),
     forwardRef(() => TelegramModule),
   ],
   controllers: [WebChatController, WebChatAdminController],

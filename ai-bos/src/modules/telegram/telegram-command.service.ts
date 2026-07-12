@@ -1,4 +1,5 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { ChatService } from '../chat/chat.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { WarehouseService } from '../warehouse/warehouse.service';
@@ -22,6 +23,7 @@ export class TelegramCommandService {
     private readonly ticketsService: TicketsService,
     private readonly warehouseService: WarehouseService,
     @Inject(forwardRef(() => AIChatService)) private readonly aiChatService: AIChatService,
+    @Inject(forwardRef(() => ChatService)) private readonly chatService: ChatService,
   ) {}
 
   async handleCommand(tenantId: string, text: string, staffUserId: string): Promise<string> {
@@ -33,6 +35,10 @@ export class TelegramCommandService {
 
     if (normalized === '/s' || normalized.startsWith('/s ')) {
       return this.handleSelectSession(tenantId, staffUserId, normalized);
+    }
+
+    if (normalized.startsWith('/claim')) {
+      return this.handleClaimConversation(tenantId, staffUserId, normalized);
     }
 
     if (this.matchesAny(normalized, ['doanh thu', 'revenue'])) {
@@ -51,19 +57,52 @@ export class TelegramCommandService {
   }
 
   /**
-   * Liet ke cac khach nhan vien nay dang phu trach, hien DUNG so thu tu CO DINH
-   * (queueNumber) da gan tu luc takeover - day chi la lenh XEM LAI TUY CHON, KHONG
-   * BAT BUOC phai go truoc /s <so> nua (so da co san tu luc canh bao Telegram).
+   * Nhan xu ly 1 cuoc hoi thoai WhatsApp CHUA CO AI phu trach - dua vao ma ngan
+   * (8 ky tu dau cua conversation id) da hien trong canh bao "khach WhatsApp moi".
    */
-  private async handleListSessions(tenantId: string, staffUserId: string): Promise<string> {
-    const sessions = await this.aiChatService.findMySessions(tenantId, staffUserId);
-    if (sessions.length === 0) {
-      return '📭 Bạn hiện không phụ trách phiên chat nào.';
+  private async handleClaimConversation(
+    tenantId: string,
+    staffUserId: string,
+    normalized: string,
+  ): Promise<string> {
+    const shortId = normalized.replace('/claim', '').trim();
+    if (!shortId) {
+      return 'Vui lòng dùng đúng cú pháp: <code>/claim &lt;mã&gt;</code> (xem mã trong thông báo khách mới).';
     }
 
-    const lines = sessions.map(
-      (s) => `${s.queueNumber}. Khách (cập nhật ${s.updatedAt.toLocaleTimeString('vi-VN')})`,
-    );
+    // Tim conversation theo ma ngan trong danh sach cua tenant (khong the query
+    // truc tiep theo prefix ID qua repository don gian, nen duyet qua findAllSessions
+    // tuong duong - o day dung tam findMyConversations voi staffUserId rong de lay
+    // tat ca chua ai nhan, don gian hoa bang cach goi ham rieng trong ChatService).
+    try {
+      const conversation = await this.chatService.claimConversationByShortId(tenantId, shortId, staffUserId);
+      return `✅ Đã nhận xử lý, bạn là khách số ${conversation.queueNumber}. Gõ tin nhắn tự do để trả lời ngay.`;
+    } catch (err) {
+      return err.message || 'Không tìm thấy cuộc hội thoại này, kiểm tra lại mã.';
+    }
+  }
+
+  /**
+   * Liet ke cac khach nhan vien nay dang phu trach, hien DUNG so thu tu CO DINH
+   * (queueNumber) da gan tu luc takeover/claim - day chi la lenh XEM LAI TUY CHON,
+   * KHONG BAT BUOC phai go truoc /s <so> nua (so da co san tu luc canh bao Telegram).
+   * Gom CA WebChat lan WhatsApp vi dung chung 1 day so.
+   */
+  private async handleListSessions(tenantId: string, staffUserId: string): Promise<string> {
+    const [webSessions, conversations] = await Promise.all([
+      this.aiChatService.findMySessions(tenantId, staffUserId),
+      this.chatService.findMyConversations(tenantId, staffUserId),
+    ]);
+
+    const lines = [
+      ...webSessions.map((s) => `${s.queueNumber}. Khách Website (cập nhật ${s.updatedAt.toLocaleTimeString('vi-VN')})`),
+      ...conversations.map((c) => `${c.queueNumber}. Khách WhatsApp (cập nhật ${c.updatedAt.toLocaleTimeString('vi-VN')})`),
+    ].sort();
+
+    if (lines.length === 0) {
+      return '📭 Bạn hiện không phụ trách khách nào.';
+    }
+
     return (
       `📋 <b>Các khách bạn đang phụ trách</b>\n${lines.join('\n')}\n\n` +
       `Dùng lệnh <code>/s &lt;số&gt;</code> để chọn khách muốn trả lời tiếp theo (vd: <code>/s 2</code>).`
@@ -71,9 +110,10 @@ export class TelegramCommandService {
   }
 
   /**
-   * Chon khach theo SO THU TU CO DINH - so nay duoc gan 1 LAN DUY NHAT luc takeover,
-   * KHONG PHAI vi tri trong danh sach, nen luon dung du co khach moi takeover sau do.
-   * KHONG BAT BUOC phai go /ds truoc - so da hien san trong canh bao Telegram.
+   * Chon khach theo SO THU TU CO DINH - so nay duoc gan 1 LAN DUY NHAT luc
+   * takeover/claim, KHONG PHAI vi tri trong danh sach. Thu WebChat truoc, neu
+   * khong thay thi thu WhatsApp (vi dung chung 1 day so nen chi 1 trong 2 co
+   * dung so nay tai 1 thoi diem).
    */
   private async handleSelectSession(
     tenantId: string,
@@ -89,7 +129,14 @@ export class TelegramCommandService {
 
     try {
       await this.aiChatService.selectSessionByNumber(tenantId, staffUserId, queueNumber);
-      return `✅ Đã chuyển sang trả lời khách số ${queueNumber}. Tin nhắn tiếp theo bạn gõ sẽ gửi cho khách này.`;
+      return `✅ Đã chuyển sang trả lời khách số ${queueNumber} (Website). Tin nhắn tiếp theo bạn gõ sẽ gửi cho khách này.`;
+    } catch {
+      // Khong thay o WebChat, thu WhatsApp
+    }
+
+    try {
+      await this.chatService.selectConversationByNumber(tenantId, staffUserId, queueNumber);
+      return `✅ Đã chuyển sang trả lời khách số ${queueNumber} (WhatsApp). Tin nhắn tiếp theo bạn gõ sẽ gửi cho khách này.`;
     } catch (err) {
       return err.message || 'Không thể chọn khách này, vui lòng thử /ds để xem lại danh sách.';
     }

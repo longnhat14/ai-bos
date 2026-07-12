@@ -10,8 +10,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ChatService } from '../chat/chat.service';
+import { SenderType } from '../chat/chat-message.entity';
 import { AIChatService } from '../webchat/ai-chat.service';
-import { TelegramBinding } from './telegram-binding.entity';
+import { ActiveChannelType, TelegramBinding } from './telegram-binding.entity';
 import { TelegramChannel } from './telegram-channel.service';
 import { TelegramCommandService } from './telegram-command.service';
 
@@ -29,6 +31,7 @@ export class TelegramWebhookController {
     private readonly telegramChannel: TelegramChannel,
     private readonly commandService: TelegramCommandService,
     @Inject(forwardRef(() => AIChatService)) private readonly aiChatService: AIChatService,
+    @Inject(forwardRef(() => ChatService)) private readonly chatService: ChatService,
   ) {}
 
   @Post()
@@ -73,24 +76,40 @@ export class TelegramWebhookController {
         return { ok: true };
       }
 
-      // Neu nhan vien nay dang co 1 phien webchat "dang focus" (da takeover hoac
-      // vua /switch sang) -> coi tin nhan Telegram nay CHINH LA cau tra loi cho
-      // khach cua phien do. KHONG con doan "phien gan nhat" nhu truoc - vi khi
-      // xu ly nhieu khach cung luc, doan mo se gui NHAM cau tra loi.
-      const activeSession = await this.aiChatService.getActiveSessionForStaff(
-        binding.tenantId,
-        binding.userId,
-      );
-
-      if (activeSession) {
-        await this.aiChatService.staffReply(binding.tenantId, activeSession.id, binding.userId, text);
-        await this.telegramChannel.send(
-          { externalId: chatId },
-          {
-            text: `✅ Đã gửi trả lời cho khách (phiên <code>${activeSession.id.slice(0, 8)}</code>). Dùng /ds nếu bạn đang xử lý nhiều khách cùng lúc.`,
-          },
+      // Neu nhan vien nay dang co 1 khach "dang focus" (da takeover/claim hoac vua
+      // /s sang) -> coi tin nhan Telegram nay CHINH LA cau tra loi. Phan biet WebChat
+      // hay WhatsApp qua active_channel_type - dinh tuyen dung service tuong ung.
+      if (binding.activeChannelType === ActiveChannelType.WHATSAPP) {
+        const activeConversation = await this.chatService.getActiveConversationForStaff(
+          binding.tenantId,
+          binding.userId,
         );
-        return { ok: true };
+        if (activeConversation) {
+          await this.chatService.sendMessage(binding.tenantId, activeConversation.id, {
+            senderType: SenderType.STAFF,
+            text,
+          });
+          await this.telegramChannel.send(
+            { externalId: chatId },
+            { text: `✅ Đã gửi trả lời cho khách WhatsApp số ${activeConversation.queueNumber}.` },
+          );
+          return { ok: true };
+        }
+      } else {
+        const activeSession = await this.aiChatService.getActiveSessionForStaff(
+          binding.tenantId,
+          binding.userId,
+        );
+        if (activeSession) {
+          await this.aiChatService.staffReply(binding.tenantId, activeSession.id, binding.userId, text);
+          await this.telegramChannel.send(
+            { externalId: chatId },
+            {
+              text: `✅ Đã gửi trả lời cho khách số ${activeSession.queueNumber} (Website). Dùng /ds nếu bạn đang xử lý nhiều khách cùng lúc.`,
+            },
+          );
+          return { ok: true };
+        }
       }
 
       const reply = await this.commandService.handleCommand(binding.tenantId, text, binding.userId);

@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ChatModule } from '../chat/chat.module';
 import { DashboardModule } from '../dashboard/dashboard.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { WarehouseModule } from '../warehouse/warehouse.module';
@@ -17,6 +18,7 @@ import { TelegramWebhookController } from './telegram-webhook.controller';
     TicketsModule,
     WarehouseModule,
     forwardRef(() => WebChatModule),
+    forwardRef(() => ChatModule),
   ],
   controllers: [TelegramController, TelegramWebhookController],
   providers: [TelegramChannel, TelegramCommandService],

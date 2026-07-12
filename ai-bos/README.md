@@ -847,6 +847,46 @@ Trường `translatedText` trong tin nhắn sẽ hiện bản tiếng Anh, còn 
 
 **Với PCTech (mặc định KHÔNG dịch)** — tạo phiên như bình thường không cần `customerLanguage`, trả lời qua Telegram sẽ giữ nguyên văn, không gọi Claude API (tiết kiệm chi phí, đúng tinh thần "chỉ dịch khi cần").
 
+### Mở rộng Telegram Bridge sang WhatsApp (khách nhắn WhatsApp bằng ngôn ngữ khác)
+
+**Tin quan trọng:** Dịch tự động cho WhatsApp **đã hoạt động sẵn** từ lúc tích hợp WhatsApp (dùng chung `ChatService`/`TranslationService`) — khách nhắn tiếng Anh tự dịch cho nhân viên đọc, nhân viên trả lời tiếng Việt tự dịch ngược gửi qua WhatsApp thật.
+
+**Phần mới bổ sung:** cầu nối Telegram (giành quyền, số thứ tự, cảnh báo 15s) — trước đây chỉ áp dụng AI Chat Website — giờ **áp dụng cho cả WhatsApp**, dùng chung 1 dãy số thứ tự (`/s <số>` hoạt động cho cả 2 loại khách).
+
+**Khác biệt quan trọng:** WhatsApp không có AI tự trả lời trước, nên cần bước **"nhận xử lý" (`/claim`)** trước khi tham gia `/s <số>`.
+
+**Test luồng đầy đủ:**
+
+**Bước 1 – Khách WhatsApp nhắn tin lần đầu** (qua webhook thật, hoặc mô phỏng qua API):
+```bash
+curl -X POST http://localhost:3000/api/v1/chat/conversations -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"customerId":"CUSTOMER_ID","customerLanguage":"en"}'
+```
+Với webhook WhatsApp thật, bước này tự động xảy ra khi khách nhắn tin — **tất cả nhân viên đã liên kết Telegram** sẽ nhận ngay:
+```
+📲 Khách WhatsApp mới nhắn, chưa ai nhận xử lý!
+
+Tin nhắn: "..."
+
+👉 Gõ /claim <mã> để nhận xử lý cuộc hội thoại này.
+```
+
+**Bước 2 – Nhân viên gõ lệnh nhận xử lý trên Telegram:**
+```
+/claim <8_ky_tu_dau_cua_conversation_id>
+```
+Bot xác nhận: `✅ Đã nhận xử lý, bạn là khách số 1.`
+
+**Bước 3 – Từ giờ dùng chung cơ chế đã test:** gõ tin nhắn tự do → tự động gửi cho đúng khách WhatsApp này; nếu đang xử lý nhiều khách (cả Website lẫn WhatsApp), `/ds` sẽ liệt kê **cả 2 loại** kèm nhãn phân biệt, `/s <số>` chọn đúng khách dù là Website hay WhatsApp.
+
+**Bước 4 – Nếu 15 giây không trả lời, cảnh báo tự động gửi:**
+```
+⚠️ Khách số 1 (WhatsApp) đang chờ phản hồi!
+...
+👉 Gõ /s 1 để trả lời ngay.
+```
+
+**Kiểm tra dịch hoạt động đúng** — trả lời bằng tiếng Việt qua Telegram, kiểm tra khách WhatsApp thật nhận được bản tiếng Anh đã dịch (giống hệt cách test đã làm ở phần WhatsApp Business API phía trên).
 
 ## 4. Cấu trúc thư mục
 
