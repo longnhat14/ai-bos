@@ -911,6 +911,41 @@ https://xxxx.ngrok-free.app/webhooks/zalo
 
 **Bước 4 – Test bằng cách nhắn tin thật vào Zalo OA** (từ điện thoại), hoặc mô phỏng qua API — dùng chung toàn bộ cơ chế `/claim`, `/ds`, `/s <số>`, cảnh báo 15s đã test với WhatsApp, chỉ khác: **Zalo mặc định KHÔNG dịch tự động** (khách Việt Nam), trong khi WhatsApp mặc định CÓ dịch (khách quốc tế). Nếu PCTech gặp khách nước ngoài qua Zalo, có thể bật dịch riêng bằng cách gọi `POST /chat/conversations` với `enableAutoTranslate: true` trước khi liên kết webhook (tùy biến thêm nếu cần).
 
+## 3.5. Database Migration (thay cho `synchronize: true`)
+
+**Đã chuyển hẳn sang migration** — `synchronize` giờ chỉ `true` khi `NODE_ENV=development` (máy bạn đang dev), **luôn `false`** khi `NODE_ENV=production`. File migration đầu tiên (`InitialSchema`) đã được tạo, chứa đầy đủ 22 bảng đúng với toàn bộ entity hiện tại.
+
+**Đã kiểm chứng bằng test thật:**
+- `npm run migration:run` → tạo đủ 22 bảng + bảng `migrations` theo dõi lịch sử
+- `npm run migration:revert` → xóa sạch đúng 22 bảng vừa tạo, khôi phục về trạng thái trống — xác nhận cơ chế rollback hoạt động
+
+### Quy trình từ giờ trở đi khi thay đổi entity (schema)
+
+**Bước 1 – Sửa entity như bình thường** (thêm cột, đổi tên, v.v.) trong lúc dev (`NODE_ENV=development`, `synchronize=true` vẫn tự động áp dụng để bạn test nhanh).
+
+**Bước 2 – Khi đã ưng ý, sinh migration mới** (so sánh entity hiện tại với schema đã áp dụng qua migration trước đó):
+```bash
+npm run migration:generate -- src/database/migrations/TenMoTaThayDoi
+```
+Ví dụ: `npm run migration:generate -- src/database/migrations/AddCustomerNote`
+
+**Bước 3 – BẮT BUỘC mở file migration vừa sinh ra, đọc kỹ trước khi commit:**
+- Thấy `DROP COLUMN`/`DROP TABLE` → xác nhận đây đúng là ý định của bạn, không phải nhầm lẫn tên cột
+- Nếu cần đổi tên cột mà không muốn mất dữ liệu, sửa lại thành `RENAME COLUMN` thay vì để TypeORM tự sinh `DROP` + `ADD` (mất dữ liệu)
+
+**Bước 4 – Khi deploy thật, chạy migration TRƯỚC khi khởi động app:**
+```bash
+npm run migration:run
+npm run start:prod
+```
+
+**Bước 5 – Nếu cần hoàn tác migration gần nhất** (vd phát hiện lỗi ngay sau khi chạy):
+```bash
+npm run migration:revert
+```
+
+**Lưu ý quan trọng:** từ giờ **không sửa database production bằng cách chỉnh entity rồi khởi động lại** — mọi thay đổi schema production đều phải qua đúng quy trình 5 bước trên.
+
 ## 4. Cấu trúc thư mục
 
 ```
