@@ -23,4 +23,9 @@ export class WebChatMessage extends TenantBaseEntity {
 
   @Column({ name: 'image_mime_type', type: 'varchar', nullable: true })
   imageMimeType: string | null;
+
+  // Neu role = ASSISTANT va truong nay CO gia tri -> tin nhan do NHAN VIEN tu go
+  // (sau khi takeover), KHONG PHAI AI tra loi. Null = AI tra loi tu dong.
+  @Column({ name: 'staff_id', type: 'uuid', nullable: true })
+  staffId: string | null;
 }

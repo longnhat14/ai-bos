@@ -680,6 +680,37 @@ async function loadBranding(tenantCode) {
 
 **Lưu ý bảo mật quan trọng:** chỉ đúng 1 thư mục `uploads/branding/` được serve công khai qua URL — các thư mục khác (`uploads/tickets`, `uploads/webchat` chứa ảnh lỗi máy/thông tin khách hàng) **không** được serve tĩnh, tránh lộ dữ liệu nhạy cảm ra internet.
 
+### API giám sát/can thiệp AI Chat Website (dành cho nhân viên — chỉ API, chưa có giao diện)
+
+**Bối cảnh:** khi khách chat với AI Chat Website, nhân viên hiện chưa có giao diện để "nhìn thấy". Các API dưới đây chuẩn bị sẵn logic, để sau này Admin Frontend chỉ cần "vẽ giao diện lên trên".
+
+**Bước 1 – Xem danh sách tất cả phiên chat đang có:**
+```bash
+curl http://localhost:3000/api/v1/webchat/sessions -H "Authorization: Bearer TOKEN"
+```
+
+**Bước 2 – Xem chi tiết 1 phiên (giống endpoint public nhưng yêu cầu đăng nhập):**
+```bash
+curl http://localhost:3000/api/v1/webchat/sessions/SESSION_ID -H "Authorization: Bearer TOKEN"
+```
+
+**Bước 3 – Nhân viên "giành quyền" từ AI** (dùng khi thấy AI trả lời sai hoặc khách muốn nói chuyện với người thật):
+```bash
+curl -X POST http://localhost:3000/api/v1/webchat/sessions/SESSION_ID/takeover -H "Authorization: Bearer TOKEN"
+```
+Từ giờ, nếu khách tiếp tục nhắn tin qua endpoint public (`/public/webchat/messages`), AI **sẽ không tự động trả lời nữa** — response trả về `awaitingStaff: true`.
+
+**Bước 4 – Nhân viên tự gõ tin nhắn trả lời khách:**
+```bash
+curl -X POST http://localhost:3000/api/v1/webchat/sessions/SESSION_ID/reply -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"text":"Chao ban, minh la nhan vien ho tro, minh se giup ban ngay day."}'
+```
+
+**Bước 5 – Trả quyền lại cho AI khi xong việc:**
+```bash
+curl -X POST http://localhost:3000/api/v1/webchat/sessions/SESSION_ID/release -H "Authorization: Bearer TOKEN"
+```
+
 ## 4. Cấu trúc thư mục
 
 ```

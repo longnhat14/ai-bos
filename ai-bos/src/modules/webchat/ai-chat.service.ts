@@ -6,7 +6,7 @@ import { TenantsService } from '../tenants/tenants.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { WarehouseService } from '../warehouse/warehouse.service';
 import { WebChatMessage, WebChatRole } from './web-chat-message.entity';
-import { WebChatSession } from './web-chat-session.entity';
+import { WebChatControlMode, WebChatSession } from './web-chat-session.entity';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const CHAT_MODEL = 'claude-sonnet-5'; // can suy luan tot hon Haiku vi phai dieu phoi tool-calling + hoi thoai tu nhien
@@ -74,16 +74,77 @@ export class AIChatService {
   }
 
   /**
+   * Danh sach TAT CA phien chat cua tenant - dung cho man hinh (sau nay) hoac API
+   * de nhan vien thay dang co bao nhieu khach chat, phien nao dang can chu y.
+   */
+  async findAllSessions(tenantId: string): Promise<WebChatSession[]> {
+    return this.sessionRepo.find({ where: { tenantId }, order: { createdAt: 'DESC' } });
+  }
+
+  async findSession(tenantId: string, sessionId: string): Promise<WebChatSession> {
+    const session = await this.sessionRepo.findOne({ where: { id: sessionId, tenantId } });
+    if (!session) throw new NotFoundException('Khong tim thay phien chat');
+    return session;
+  }
+
+  /**
+   * Nhan vien "gianh quyen" tu AI - tu day AI SE KHONG con tu dong tra loi trong
+   * sendMessage() nua, nhan vien phai tu go tin nhan qua staffReply().
+   */
+  async takeover(tenantId: string, sessionId: string, staffUserId: string): Promise<WebChatSession> {
+    const session = await this.findSession(tenantId, sessionId);
+    session.controlMode = WebChatControlMode.STAFF;
+    session.assignedStaffId = staffUserId;
+    return this.sessionRepo.save(session);
+  }
+
+  /** Tra quyen lai cho AI (nhan vien khong con can thiep nua) */
+  async releaseToAI(tenantId: string, sessionId: string): Promise<WebChatSession> {
+    const session = await this.findSession(tenantId, sessionId);
+    session.controlMode = WebChatControlMode.AI;
+    session.assignedStaffId = null;
+    return this.sessionRepo.save(session);
+  }
+
+  /** Nhan vien tu go tin nhan gui truc tiep cho khach (sau khi da takeover) */
+  async staffReply(
+    tenantId: string,
+    sessionId: string,
+    staffUserId: string,
+    text: string,
+  ): Promise<WebChatMessage> {
+    const session = await this.findSession(tenantId, sessionId);
+    if (session.controlMode !== WebChatControlMode.STAFF) {
+      throw new NotFoundException(
+        'Phien nay chua duoc "gianh quyen" - goi API takeover truoc khi tra loi thu cong',
+      );
+    }
+
+    return this.messageRepo.save(
+      this.messageRepo.create({
+        tenantId,
+        sessionId,
+        role: WebChatRole.ASSISTANT,
+        text,
+        staffId: staffUserId,
+      }),
+    );
+  }
+
+  /**
    * Xu ly 1 luot tin nhan cua khach: luu tin nhan (kem anh neu co), goi Claude voi
    * Tool Use (check_inventory, create_ticket), thuc thi tool THAT (khong AI tu bia),
    * roi tra ve cau tra loi cuoi cung cho khach.
+   *
+   * Neu phien da bi nhan vien "gianh quyen" (control_mode = staff), CHI luu tin nhan
+   * cua khach, KHONG goi Claude nua - nhan vien se tu tra loi qua staffReply().
    */
   async sendMessage(
     tenantId: string,
     sessionId: string,
     text: string,
     imageFile?: { path: string; mimeType: string },
-  ): Promise<{ reply: string; createdTicketId: string | null }> {
+  ): Promise<{ reply: string | null; createdTicketId: string | null; awaitingStaff: boolean }> {
     const session = await this.sessionRepo.findOne({ where: { id: sessionId, tenantId } });
     if (!session) throw new NotFoundException('Khong tim thay phien chat');
 
@@ -98,11 +159,16 @@ export class AIChatService {
       }),
     );
 
+    if (session.controlMode === WebChatControlMode.STAFF) {
+      // Nhan vien da gianh quyen - AI khong tra loi tu dong nua
+      return { reply: null, createdTicketId: null, awaitingStaff: true };
+    }
+
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       const fallback = 'Xin loi, tro ly AI hien chua san sang. Vui long lien he truc tiep nhan vien.';
       await this.saveAssistantReply(tenantId, sessionId, fallback);
-      return { reply: fallback, createdTicketId: null };
+      return { reply: fallback, createdTicketId: null, awaitingStaff: false };
     }
 
     const history = await this.getHistory(sessionId);
@@ -159,7 +225,7 @@ export class AIChatService {
     }
 
     await this.saveAssistantReply(tenantId, sessionId, finalReplyText);
-    return { reply: finalReplyText, createdTicketId };
+    return { reply: finalReplyText, createdTicketId, awaitingStaff: false };
   }
 
   private async executeTool(tenantId: string, toolName: string, input: any): Promise<any> {
