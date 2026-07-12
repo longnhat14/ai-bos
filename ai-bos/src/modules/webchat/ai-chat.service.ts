@@ -1,12 +1,19 @@
+import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Queue } from 'bullmq';
 import { Repository } from 'typeorm';
+import { TranslationService } from '../chat/translation.service';
 import { CustomersService } from '../customers/customers.service';
+import { TelegramBinding } from '../telegram/telegram-binding.entity';
 import { TenantsService } from '../tenants/tenants.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { WarehouseService } from '../warehouse/warehouse.service';
 import { WebChatMessage, WebChatRole } from './web-chat-message.entity';
 import { WebChatControlMode, WebChatSession } from './web-chat-session.entity';
+
+const ESCALATION_DELAY_MS = 15000; // 15 giay - dung theo yeu cau da thong nhat
+const AUTO_TRANSLATE_TENANT_CODE = 'remoteit'; // dung nhat quan voi ChatService (RemoteIT mac dinh bat dich)
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const CHAT_MODEL = 'claude-sonnet-5'; // can suy luan tot hon Haiku vi phai dieu phoi tool-calling + hoi thoai tu nhien
@@ -57,20 +64,48 @@ export class AIChatService {
   constructor(
     @InjectRepository(WebChatSession) private readonly sessionRepo: Repository<WebChatSession>,
     @InjectRepository(WebChatMessage) private readonly messageRepo: Repository<WebChatMessage>,
+    @InjectRepository(TelegramBinding) private readonly telegramBindingRepo: Repository<TelegramBinding>,
+    @InjectQueue('webchat-escalation') private readonly escalationQueue: Queue,
     private readonly tenantsService: TenantsService,
     private readonly customersService: CustomersService,
     private readonly ticketsService: TicketsService,
     private readonly warehouseService: WarehouseService,
+    private readonly translationService: TranslationService,
   ) {}
 
-  async createSession(tenantCode: string): Promise<WebChatSession> {
+  /**
+   * Tao phien webchat moi. autoTranslateEnabled mac dinh THEO TENANT (RemoteIT = bat),
+   * giong dung nguyen tac da ap dung cho Chat/WhatsApp - dam bao nhat quan toan he thong.
+   */
+  async createSession(tenantCode: string, customerLanguage = 'en'): Promise<WebChatSession> {
     const tenant = await this.tenantsService.getByCode(tenantCode);
-    const session = this.sessionRepo.create({ tenantId: tenant.id, customerId: null });
+    const session = this.sessionRepo.create({
+      tenantId: tenant.id,
+      customerId: null,
+      customerLanguage,
+      autoTranslateEnabled: tenant.code === AUTO_TRANSLATE_TENANT_CODE,
+    });
     return this.sessionRepo.save(session);
   }
 
   async getHistory(sessionId: string): Promise<WebChatMessage[]> {
     return this.messageRepo.find({ where: { sessionId }, order: { createdAt: 'ASC' } });
+  }
+
+  /**
+   * Lich su hien thi PHIA KHACH (public) - neu tin nhan cua nhan vien co ban dich,
+   * hien ban dich (ngon ngu khach), KHONG hien nguyen van tieng Viet nhan vien go.
+   */
+  async getCustomerFacingHistory(
+    sessionId: string,
+  ): Promise<Array<{ id: string; text: string; role: WebChatRole; createdAt: Date }>> {
+    const messages = await this.getHistory(sessionId);
+    return messages.map((msg) => ({
+      id: msg.id,
+      text: msg.translatedText ?? msg.text,
+      role: msg.role,
+      createdAt: msg.createdAt,
+    }));
   }
 
   /**
@@ -88,14 +123,114 @@ export class AIChatService {
   }
 
   /**
+   * Danh sach TAT CA phien nhan vien nay dang phu trach (da takeover), KEM SO THU TU
+   * CO DINH (queueNumber) da gan tu luc takeover - dung cho lenh Telegram "/ds".
+   */
+  async findMySessions(tenantId: string, staffUserId: string): Promise<WebChatSession[]> {
+    return this.sessionRepo.find({
+      where: { tenantId, assignedStaffId: staffUserId, controlMode: WebChatControlMode.STAFF },
+      order: { queueNumber: 'ASC' },
+    });
+  }
+
+  /**
+   * Chon phien theo SO THU TU CO DINH (queueNumber) - so nay duoc gan 1 LAN DUY NHAT
+   * luc takeover(), KHONG PHAI vi tri trong danh sach nen KHONG BAO GIO bi lech du
+   * co bao nhieu khach khac takeover sau do (khac hoan toan voi cach danh so theo
+   * vi tri/snapshot truoc day). Vi vay KHONG can go /ds truoc - so da co san tu
+   * luc canh bao Telegram hien ra.
+   */
+  async selectSessionByNumber(
+    tenantId: string,
+    staffUserId: string,
+    queueNumber: number,
+  ): Promise<WebChatSession> {
+    const session = await this.sessionRepo.findOne({
+      where: {
+        tenantId,
+        assignedStaffId: staffUserId,
+        controlMode: WebChatControlMode.STAFF,
+        queueNumber,
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException(
+        `Không tìm thấy khách số ${queueNumber} trong danh sách bạn phụ trách. Dùng /ds để xem lại.`,
+      );
+    }
+
+    await this.setActiveSessionForStaff(tenantId, staffUserId, session.id);
+    return session;
+  }
+
+  /**
+   * Dung boi TelegramWebhookController de biet tin nhan tu do cua nhan vien
+   * la cau tra loi cho PHIEN NAO - dua vao active_session_id da luu san tren
+   * TelegramBinding (KHONG doan "phien gan nhat", vi khi co nhieu khach nhan
+   * cung luc, doan mo se gui NHAM cau tra loi cho khach khac).
+   */
+  async getActiveSessionForStaff(tenantId: string, staffUserId: string): Promise<WebChatSession | null> {
+    const binding = await this.telegramBindingRepo.findOne({ where: { tenantId, userId: staffUserId } });
+    if (!binding?.activeSessionId) return null;
+
+    return this.sessionRepo.findOne({
+      where: {
+        id: binding.activeSessionId,
+        tenantId,
+        assignedStaffId: staffUserId,
+        controlMode: WebChatControlMode.STAFF,
+      },
+    });
+  }
+
+  /**
+   * Nhan vien chon 1 phien lam "phien dang focus" - dung khi ho go lenh /s <so>
+   * tren Telegram de chuyen qua lai giua nhieu khach dang xu ly cung luc.
+   */
+  async setActiveSessionForStaff(
+    tenantId: string,
+    staffUserId: string,
+    sessionId: string,
+  ): Promise<void> {
+    await this.findSession(tenantId, sessionId);
+    const binding = await this.telegramBindingRepo.findOne({ where: { tenantId, userId: staffUserId } });
+    if (binding) {
+      binding.activeSessionId = sessionId;
+      await this.telegramBindingRepo.save(binding);
+    }
+  }
+
+  /**
    * Nhan vien "gianh quyen" tu AI - tu day AI SE KHONG con tu dong tra loi trong
    * sendMessage() nua, nhan vien phai tu go tin nhan qua staffReply().
+   *
+   * Gan SO THU TU CO DINH (queueNumber) cho phien nay dua tren bo dem rieng cua
+   * TUNG nhan vien (TelegramBinding.nextQueueNumber) - so nay KHONG BAO GIO doi
+   * sau do, dam bao canh bao Telegram + lenh /s <so> luon chinh xac vinh vien,
+   * du co bao nhieu khach khac takeover sau (khong con phu thuoc vao thu tu hay
+   * "anh chup" danh sach nhu thiet ke truoc).
+   *
+   * Dong thoi TU DONG dat phien nay thanh "phien dang focus" tren Telegram cua ho.
    */
   async takeover(tenantId: string, sessionId: string, staffUserId: string): Promise<WebChatSession> {
     const session = await this.findSession(tenantId, sessionId);
+
+    let binding = await this.telegramBindingRepo.findOne({ where: { tenantId, userId: staffUserId } });
+    const assignedNumber = binding?.nextQueueNumber ?? 1;
+
     session.controlMode = WebChatControlMode.STAFF;
     session.assignedStaffId = staffUserId;
-    return this.sessionRepo.save(session);
+    session.queueNumber = assignedNumber;
+    await this.sessionRepo.save(session);
+
+    if (binding) {
+      binding.nextQueueNumber = assignedNumber + 1;
+      binding.activeSessionId = sessionId;
+      await this.telegramBindingRepo.save(binding);
+    }
+
+    return session;
   }
 
   /** Tra quyen lai cho AI (nhan vien khong con can thiep nua) */
@@ -103,10 +238,28 @@ export class AIChatService {
     const session = await this.findSession(tenantId, sessionId);
     session.controlMode = WebChatControlMode.AI;
     session.assignedStaffId = null;
-    return this.sessionRepo.save(session);
+    session.queueNumber = null;
+    await this.sessionRepo.save(session);
+
+    const binding = await this.telegramBindingRepo.findOne({
+      where: { tenantId, activeSessionId: sessionId },
+    });
+    if (binding) {
+      binding.activeSessionId = null;
+      await this.telegramBindingRepo.save(binding);
+    }
+
+    return session;
   }
 
-  /** Nhan vien tu go tin nhan gui truc tiep cho khach (sau khi da takeover) */
+  /**
+   * Nhan vien tu go tin nhan gui truc tiep cho khach (sau khi da takeover).
+   *
+   * NEU session.autoTranslateEnabled = true (RemoteIT mac dinh, hoac PCTech duoc
+   * bat rieng), tin nhan se duoc DICH TU DONG sang ngon ngu khach (customerLanguage)
+   * truoc khi khach nhin thay - dung Claude API giong het co che da dung cho
+   * Chat/WhatsApp truoc day (TranslationService dung chung, khong viet lai).
+   */
   async staffReply(
     tenantId: string,
     sessionId: string,
@@ -120,6 +273,14 @@ export class AIChatService {
       );
     }
 
+    let translatedText: string | null = null;
+    let translatedLanguage: string | null = null;
+
+    if (session.autoTranslateEnabled && session.customerLanguage !== 'vi') {
+      translatedText = await this.translationService.translate(text, 'vi', session.customerLanguage);
+      translatedLanguage = session.customerLanguage;
+    }
+
     return this.messageRepo.save(
       this.messageRepo.create({
         tenantId,
@@ -127,6 +288,8 @@ export class AIChatService {
         role: WebChatRole.ASSISTANT,
         text,
         staffId: staffUserId,
+        translatedText,
+        translatedLanguage,
       }),
     );
   }
@@ -160,7 +323,27 @@ export class AIChatService {
     );
 
     if (session.controlMode === WebChatControlMode.STAFF) {
-      // Nhan vien da gianh quyen - AI khong tra loi tu dong nua
+      // Nhan vien da gianh quyen - AI khong tra loi tu dong nua.
+      // Dat lich kiem tra sau 15s: neu van chua co nhan vien tra loi, canh bao qua Telegram.
+      const customerMessage = await this.messageRepo.findOne({
+        where: { tenantId, sessionId, role: WebChatRole.CUSTOMER },
+        order: { createdAt: 'DESC' },
+      });
+      if (customerMessage) {
+        await this.escalationQueue.add(
+          'check-response',
+          {
+            tenantId,
+            sessionId,
+            customerMessageId: customerMessage.id,
+            customerMessageText: customerMessage.text,
+            customerMessageCreatedAt: customerMessage.createdAt.toISOString(),
+            queueNumber: session.queueNumber,
+          },
+          { delay: ESCALATION_DELAY_MS },
+        );
+      }
+
       return { reply: null, createdTicketId: null, awaitingStaff: true };
     }
 

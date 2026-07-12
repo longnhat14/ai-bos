@@ -18,6 +18,6 @@ import { TranslationService } from './translation.service';
   ],
   controllers: [ChatController],
   providers: [ChatService, TranslationService],
-  exports: [ChatService],
+  exports: [ChatService, TranslationService],
 })
 export class ChatModule {}

@@ -711,6 +711,143 @@ curl -X POST http://localhost:3000/api/v1/webchat/sessions/SESSION_ID/reply -H "
 curl -X POST http://localhost:3000/api/v1/webchat/sessions/SESSION_ID/release -H "Authorization: Bearer TOKEN"
 ```
 
+### Tự động cảnh báo Telegram nếu nhân viên không phản hồi trong 15 giây
+
+**Cơ chế:** khi nhân viên đã `takeover` 1 phiên, nếu khách nhắn tiếp mà sau **15 giây** chưa có ai trả lời, hệ thống tự động gửi cảnh báo qua Telegram (dùng BullMQ delayed job).
+
+**Điều kiện cần trước khi test:** đã cấu hình `TELEGRAM_BOT_TOKEN` và **đã liên kết tài khoản** (`POST /api/v1/telegram/link`) như hướng dẫn ở phần Telegram phía trên.
+
+**Test:**
+1. Thực hiện lại Bước 3-4 ở mục "API giám sát webchat" phía trên (takeover + khách gửi tin nhắn)
+2. **Không gọi** `POST /reply` trong vòng 15 giây
+3. Kiểm tra điện thoại Telegram của bạn — sẽ nhận được tin nhắn:
+```
+⚠️ Khách đang chờ phản hồi!
+
+Phiên chat: xxxxx
+Tin nhắn khách: "..."
+
+Đã quá 15 giây chưa có ai trả lời. Vui lòng vào hệ thống xử lý ngay.
+```
+
+**Bonus — trả lời trực tiếp từ Telegram (không cần gọi API `/reply` thủ công):**
+Sau khi nhận cảnh báo, chỉ cần **gõ thẳng câu trả lời vào Telegram** (không cần lệnh đặc biệt) — hệ thống tự động nhận diện đây là phiên đang chờ bạn xử lý, chuyển tin nhắn thành câu trả lời gửi cho khách trên webchat, và xác nhận lại:
+```
+✅ Đã gửi trả lời cho khách (phiên xxxxx).
+```
+
+**Lưu ý quan trọng:**
+- Nếu phiên chưa gán `assignedStaffId` cụ thể, cảnh báo sẽ gửi cho **tất cả** nhân viên đã liên kết Telegram của tenant đó
+
+### Xử lý nhiều khách hàng nhắn tin CÙNG LÚC (đa tenant + đa phiên)
+
+**Đa tenant (PCTech + RemoteIT):** không cần làm gì thêm — mọi bảng đã lọc theo `tenantId` từ đầu dự án, cảnh báo Telegram của PCTech chỉ đến nhân viên PCTech, không lẫn với RemoteIT.
+
+**Đa phiên cùng 1 nhân viên (đã sửa lỗi thiết kế quan trọng):** trước đây hệ thống **đoán** "phiên gần nhất" khi nhân viên trả lời trên Telegram — rủi ro gửi nhầm cho khách khác khi xử lý nhiều người cùng lúc. Đã thay bằng cơ chế **"phiên đang focus"** + **snapshot đánh số cố định** qua 2 lệnh:
+- `/ds` — xem danh sách khách đang phụ trách, đánh số 1, 2, 3...
+- `/s <số>` — chọn khách theo số để trả lời tiếp theo (vd: `/s 2`)
+
+**Điểm quan trọng nhất — chống lỗi khi có khách MỚI chen vào giữa `/ds` và `/s`:** số thứ tự được **"chụp ảnh" cố định** ngay tại thời điểm gõ `/ds`, lưu lại trong hệ thống — **không** tính lại theo thời gian thực. Nếu có khách mới nhắn tin sau khi bạn đã xem `/ds`, khách đó **không** làm xáo trộn số 1, 2, 3 đã chốt, chỉ xuất hiện khi bạn gõ `/ds` lại lần nữa.
+
+**Test kịch bản đúng tình huống bạn nêu (khách mới chen vào giữa 2 lệnh):**
+
+**Bước 1 – Tạo 2 phiên webchat (2 khách ban đầu):**
+```bash
+curl -X POST http://localhost:3000/api/v1/public/webchat/sessions -H "Content-Type: application/json" -d '{"tenantCode":"pctech"}'
+# Lap lai lan 2, duoc SESSION_ID_1 va SESSION_ID_2
+```
+
+**Bước 2 – Nhân viên nhận cả 2 phiên:**
+```bash
+curl -X POST http://localhost:3000/api/v1/webchat/sessions/SESSION_ID_1/takeover -H "Authorization: Bearer TOKEN"
+curl -X POST http://localhost:3000/api/v1/webchat/sessions/SESSION_ID_2/takeover -H "Authorization: Bearer TOKEN"
+```
+
+**Bước 3 – Trên Telegram, gõ lệnh xem danh sách (chốt snapshot tại đây):**
+```
+/ds
+```
+Bot trả lời:
+```
+📋 Các khách bạn đang phụ trách
+1. Khách (cập nhật ...)
+2. Khách (cập nhật ...)
+
+Dùng lệnh /s <số> để chọn khách muốn trả lời tiếp theo (vd: /s 2).
+```
+
+**Bước 4 – MÔ PHỎNG ĐÚNG TÌNH HUỐNG BẠN HỎI: khách thứ 3 nhắn tin XEN VÀO giữa lúc này** (chưa gõ `/s` vội):
+```bash
+curl -X POST http://localhost:3000/api/v1/public/webchat/sessions -H "Content-Type: application/json" -d '{"tenantCode":"pctech"}'
+# duoc SESSION_ID_3 (khach moi)
+curl -X POST http://localhost:3000/api/v1/webchat/sessions/SESSION_ID_3/takeover -H "Authorization: Bearer TOKEN"
+```
+
+**Bước 5 – Giờ mới gõ lệnh chọn khách số 2 (là khách ở SESSION_ID_2, KHÔNG PHẢI khách mới):**
+```
+/s 2
+```
+Bot xác nhận: `✅ Đã chuyển sang trả lời khách số 2...`
+
+**Kết quả cần kiểm chứng:** gõ tin nhắn tự do bất kỳ → **phải gửi đúng cho khách ở SESSION_ID_2** (khách thứ 2 ban đầu), **không bị lệch sang khách mới (SESSION_ID_3)** dù khách đó nhắn tin sau khi bạn đã xem `/ds`. Kiểm tra bằng cách xem lịch sử:
+```bash
+curl "http://localhost:3000/api/v1/public/webchat/sessions/SESSION_ID_2/history"
+```
+Tin nhắn vừa gõ trên Telegram phải xuất hiện ở đây, **không** xuất hiện ở lịch sử của `SESSION_ID_3`.
+
+**Bước 6 – Muốn trả lời khách mới (số 3), phải gõ `/ds` lại để cập nhật danh sách trước:**
+```
+/ds
+```
+Lần này danh sách sẽ có đủ 3 khách, `/s 3` mới trỏ đúng đến khách mới.
+
+### Cập nhật quan trọng: KHÔNG cần gõ `/ds` trước nữa + Tự động dịch qua Telegram
+
+Sau phản hồi của bạn, mình đã nâng cấp thêm 2 điểm:
+
+**1. Số thứ tự giờ CỐ ĐỊNH (giống số vé xếp hàng), không cần xem `/ds` trước:**
+- Số được gán **1 lần duy nhất** ngay lúc `takeover` (không phải vị trí trong danh sách tại 1 thời điểm)
+- Cảnh báo 15 giây **tự hiện sẵn số** — gõ `/s <số>` ngay, không cần `/ds` trước nữa
+- `/ds` giờ chỉ là lệnh xem lại **tùy chọn**, không bắt buộc
+
+**Test nhanh:**
+```bash
+# Tao 2 phien, takeover ca 2
+curl -X POST http://localhost:3000/api/v1/webchat/sessions/SESSION_ID_1/takeover -H "Authorization: Bearer TOKEN"
+# -> tra ve queueNumber: 1
+curl -X POST http://localhost:3000/api/v1/webchat/sessions/SESSION_ID_2/takeover -H "Authorization: Bearer TOKEN"
+# -> tra ve queueNumber: 2
+```
+Khách ở `SESSION_ID_2` nhắn tin, đợi 15 giây → Telegram nhận cảnh báo:
+```
+⚠️ Khách số 2 đang chờ phản hồi!
+...
+👉 Gõ /s 2 để chuyển sang trả lời khách này ngay (không cần xem danh sách trước).
+```
+Gõ thẳng `/s 2` — **không cần gõ `/ds` trước** — vẫn hoạt động đúng.
+
+**2. Tin nhắn trả lời qua Telegram giờ TỰ ĐỘNG DỊCH** (áp dụng đúng quy tắc đã thống nhất: mặc định bật cho RemoteIT, tắt cho PCTech trừ khi khai báo riêng):
+
+**Test:** tạo phiên webchat cho tenant `remoteit`, khai báo ngôn ngữ khách:
+```bash
+curl -X POST http://localhost:3000/api/v1/public/webchat/sessions -H "Content-Type: application/json" \
+  -d '{"tenantCode":"remoteit","customerLanguage":"en"}'
+```
+Takeover phiên này, rồi trả lời bằng tiếng Việt qua Telegram (gõ trực tiếp, ví dụ: "Vui lòng khởi động lại router giúp tôi"). Kiểm tra khách nhận được gì:
+```bash
+curl "http://localhost:3000/api/v1/public/webchat/sessions/SESSION_ID/history"
+```
+Kết quả mong đợi: khách thấy **bản tiếng Anh đã dịch**, không phải nguyên văn tiếng Việt.
+
+**Nhân viên xem cả 2 bản (để đối chiếu) qua endpoint admin:**
+```bash
+curl http://localhost:3000/api/v1/webchat/sessions/SESSION_ID -H "Authorization: Bearer TOKEN"
+```
+Trường `translatedText` trong tin nhắn sẽ hiện bản tiếng Anh, còn `text` vẫn giữ nguyên văn tiếng Việt nhân viên đã gõ.
+
+**Với PCTech (mặc định KHÔNG dịch)** — tạo phiên như bình thường không cần `customerLanguage`, trả lời qua Telegram sẽ giữ nguyên văn, không gọi Claude API (tiết kiệm chi phí, đúng tinh thần "chỉ dịch khi cần").
+
+
 ## 4. Cấu trúc thư mục
 
 ```

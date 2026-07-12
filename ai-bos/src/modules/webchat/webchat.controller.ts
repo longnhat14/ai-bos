@@ -35,14 +35,16 @@ export class WebChatController {
   ) {}
 
   @Post('sessions')
-  async createSession(@Body('tenantCode') tenantCode: string) {
+  async createSession(@Body('tenantCode') tenantCode: string, @Body('customerLanguage') customerLanguage?: string) {
     if (!tenantCode) throw new BadRequestException('Thieu tenantCode');
-    return this.aiChatService.createSession(tenantCode);
+    return this.aiChatService.createSession(tenantCode, customerLanguage);
   }
 
+  // Public - khach xem lai hoi thoai cua minh. Hien BAN DA DICH (neu co) thay vi
+  // nguyen van tieng Viet nhan vien go, dam bao khach LUON chi thay dung ngon ngu cua ho.
   @Get('sessions/:id/history')
   async getHistory(@Param('id') sessionId: string) {
-    return this.aiChatService.getHistory(sessionId);
+    return this.aiChatService.getCustomerFacingHistory(sessionId);
   }
 
   // Public - widget chat dung de hien logo thuong hieu tren man hinh chat truoc khi khach dang nhap
@@ -83,7 +85,7 @@ export class WebChatController {
 
     let sessionId = dto.sessionId;
     if (!sessionId) {
-      const session = await this.aiChatService.createSession(dto.tenantCode);
+      const session = await this.aiChatService.createSession(dto.tenantCode, dto.customerLanguage);
       sessionId = session.id;
     }
 

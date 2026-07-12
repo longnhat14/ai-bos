@@ -1,6 +1,16 @@
-import { Body, Controller, Headers, Logger, Post, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  forwardRef,
+  Headers,
+  Inject,
+  Logger,
+  Post,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AIChatService } from '../webchat/ai-chat.service';
 import { TelegramBinding } from './telegram-binding.entity';
 import { TelegramChannel } from './telegram-channel.service';
 import { TelegramCommandService } from './telegram-command.service';
@@ -18,6 +28,7 @@ export class TelegramWebhookController {
     @InjectRepository(TelegramBinding) private readonly bindingRepo: Repository<TelegramBinding>,
     private readonly telegramChannel: TelegramChannel,
     private readonly commandService: TelegramCommandService,
+    @Inject(forwardRef(() => AIChatService)) private readonly aiChatService: AIChatService,
   ) {}
 
   @Post()
@@ -54,7 +65,35 @@ export class TelegramWebhookController {
         return { ok: true };
       }
 
-      const reply = await this.commandService.handleCommand(binding.tenantId, text);
+      // Cac lenh dieu khien (bat dau bang "/") LUON duoc xu ly nhu lenh, KHONG BAO GIO
+      // bi hieu nham thanh cau tra loi cho khach - du dang co phien active hay khong.
+      if (text.trim().startsWith('/')) {
+        const reply = await this.commandService.handleCommand(binding.tenantId, text, binding.userId);
+        await this.telegramChannel.send({ externalId: chatId }, { text: reply });
+        return { ok: true };
+      }
+
+      // Neu nhan vien nay dang co 1 phien webchat "dang focus" (da takeover hoac
+      // vua /switch sang) -> coi tin nhan Telegram nay CHINH LA cau tra loi cho
+      // khach cua phien do. KHONG con doan "phien gan nhat" nhu truoc - vi khi
+      // xu ly nhieu khach cung luc, doan mo se gui NHAM cau tra loi.
+      const activeSession = await this.aiChatService.getActiveSessionForStaff(
+        binding.tenantId,
+        binding.userId,
+      );
+
+      if (activeSession) {
+        await this.aiChatService.staffReply(binding.tenantId, activeSession.id, binding.userId, text);
+        await this.telegramChannel.send(
+          { externalId: chatId },
+          {
+            text: `✅ Đã gửi trả lời cho khách (phiên <code>${activeSession.id.slice(0, 8)}</code>). Dùng /ds nếu bạn đang xử lý nhiều khách cùng lúc.`,
+          },
+        );
+        return { ok: true };
+      }
+
+      const reply = await this.commandService.handleCommand(binding.tenantId, text, binding.userId);
       await this.telegramChannel.send({ externalId: chatId }, { text: reply });
     } catch (err) {
       this.logger.error(`Loi xu ly webhook Telegram: ${err.message}`);

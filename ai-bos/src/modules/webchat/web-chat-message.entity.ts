@@ -28,4 +28,13 @@ export class WebChatMessage extends TenantBaseEntity {
   // (sau khi takeover), KHONG PHAI AI tra loi. Null = AI tra loi tu dong.
   @Column({ name: 'staff_id', type: 'uuid', nullable: true })
   staffId: string | null;
+
+  // Ban dich cua tin nhan (CHI dung khi staffId co gia tri VA session bat auto-translate) -
+  // "text" o tren luon la nguyen van nhan vien go (thuong la tieng Viet), con day
+  // la ban da dich sang ngon ngu khach, dung de hien thi phia khach (public history).
+  @Column({ name: 'translated_text', type: 'text', nullable: true })
+  translatedText: string | null;
+
+  @Column({ name: 'translated_language', type: 'varchar', nullable: true })
+  translatedLanguage: string | null;
 }

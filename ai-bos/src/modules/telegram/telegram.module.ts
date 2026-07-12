@@ -1,8 +1,9 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DashboardModule } from '../dashboard/dashboard.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { WarehouseModule } from '../warehouse/warehouse.module';
+import { WebChatModule } from '../webchat/webchat.module';
 import { TelegramBinding } from './telegram-binding.entity';
 import { TelegramChannel } from './telegram-channel.service';
 import { TelegramCommandService } from './telegram-command.service';
@@ -15,6 +16,7 @@ import { TelegramWebhookController } from './telegram-webhook.controller';
     DashboardModule,
     TicketsModule,
     WarehouseModule,
+    forwardRef(() => WebChatModule),
   ],
   controllers: [TelegramController, TelegramWebhookController],
   providers: [TelegramChannel, TelegramCommandService],
