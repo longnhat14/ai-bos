@@ -2,7 +2,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Queue } from 'bullmq';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { EventType } from '../../common/event-bus/events';
 import { ActiveChannelType, TelegramBinding } from '../telegram/telegram-binding.entity';
@@ -328,6 +328,17 @@ export class ChatService {
     return this.conversationRepo.find({
       where: { tenantId, assignedStaffId: staffUserId },
       order: { queueNumber: 'ASC' },
+    });
+  }
+
+  // Xem TOAN BO cuoc hoi thoai (khong loc theo nhan vien) - dung cho man hinh
+  // "hop thu chung" gop ca WhatsApp/Zalo voi AI Chat Website, giup nhan vien
+  // thay duoc CA cac cuoc hoi thoai CHUA AI NHAN (khac findMyConversations
+  // chi thay cua rieng minh).
+  async findAllConversations(tenantId: string): Promise<Conversation[]> {
+    return this.conversationRepo.find({
+      where: { tenantId, channel: In([ConversationChannel.WHATSAPP, ConversationChannel.ZALO]) },
+      order: { updatedAt: 'DESC' },
     });
   }
 

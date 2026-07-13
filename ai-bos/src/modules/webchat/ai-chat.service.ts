@@ -5,6 +5,7 @@ import { Queue } from 'bullmq';
 import { Repository } from 'typeorm';
 import { TranslationService } from '../chat/translation.service';
 import { CustomersService } from '../customers/customers.service';
+import { CustomerSource } from '../customers/customer.entity';
 import { TelegramBinding } from '../telegram/telegram-binding.entity';
 import { TenantsService } from '../tenants/tenants.service';
 import { TicketsService } from '../tickets/tickets.service';
@@ -90,6 +91,15 @@ export class AIChatService {
 
   async getHistory(sessionId: string): Promise<WebChatMessage[]> {
     return this.messageRepo.find({ where: { sessionId }, order: { createdAt: 'ASC' } });
+  }
+
+  // Dung boi endpoint xem anh co xac thuc (WebChatAdminController) - kiem tra
+  // tin nhan CO thuoc dung tenant khong truoc khi cho phep doc file anh, tranh
+  // 1 tenant xem duoc anh cua tenant khac neu doan duoc UUID.
+  async findMessage(tenantId: string, messageId: string): Promise<WebChatMessage> {
+    const message = await this.messageRepo.findOne({ where: { tenantId, id: messageId } });
+    if (!message) throw new NotFoundException('Khong tim thay tin nhan');
+    return message;
   }
 
   /**
@@ -434,6 +444,7 @@ export class AIChatService {
         customer = await this.customersService.create(tenantId, {
           fullName: input.customerName,
           phone: input.customerPhone,
+          source: CustomerSource.WEBSITE,
         });
       }
 

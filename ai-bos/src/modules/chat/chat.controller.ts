@@ -15,6 +15,13 @@ export class ChatController {
     return this.chatService.createConversation(user.tenantId, dto);
   }
 
+  // Toan bo hoi thoai WhatsApp/Zalo - dung cho man hinh "hop thu chung" gop
+  // chung voi AI Chat Website. Dat TRUOC ':id' vi 'conversations' la path tinh.
+  @Get('conversations')
+  findAllConversations(@CurrentUser() user: JwtPayload) {
+    return this.chatService.findAllConversations(user.tenantId);
+  }
+
   @Get('conversations/:id')
   findConversation(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     return this.chatService.findConversation(user.tenantId, id);

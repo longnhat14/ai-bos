@@ -2,6 +2,7 @@ import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { ChatService } from '../chat/chat.service';
 import { SenderType } from '../chat/chat-message.entity';
 import { CustomersService } from '../customers/customers.service';
+import { CustomerSource } from '../customers/customer.entity';
 import { TenantsService } from '../tenants/tenants.service';
 
 // Tenant se nhan tin nhan WhatsApp - MVP hien tai chi co RemoteIT dung WhatsApp.
@@ -38,6 +39,7 @@ export class WhatsAppInboundService {
       customer = await this.customersService.create(tenant.id, {
         fullName: msg.contactName || `WhatsApp ${msg.from}`,
         phone: msg.from,
+        source: CustomerSource.WHATSAPP,
       });
       this.logger.log(`Tu dong tao khach hang moi tu WhatsApp: ${msg.from}`);
     }

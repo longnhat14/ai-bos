@@ -1,4 +1,5 @@
-import { IsEmail, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsOptional } from 'class-validator';
+import { CustomerSource } from '../customer.entity';
 
 export class CreateCustomerDto {
   @IsNotEmpty()
@@ -24,6 +25,12 @@ export class CreateCustomerDto {
 
   @IsOptional()
   notes?: string;
+
+  // Tuy chon - cac service noi bo (WhatsApp/Zalo/AI Chat) tu truyen dung gia tri,
+  // con Frontend/API thu cong KHONG truyen gi ca -> mac dinh COUNTER (theo entity).
+  @IsOptional()
+  @IsIn(Object.values(CustomerSource))
+  source?: CustomerSource;
 }
 
 export class UpdateCustomerDto {

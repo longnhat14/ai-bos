@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ChatService } from '../chat/chat.service';
 import { SenderType } from '../chat/chat-message.entity';
 import { CustomersService } from '../customers/customers.service';
+import { CustomerSource } from '../customers/customer.entity';
 import { TenantsService } from '../tenants/tenants.service';
 
 // Tenant nhan tin nhan Zalo - mac dinh PCTech (khach hang Viet Nam), khac voi
@@ -39,6 +40,7 @@ export class ZaloInboundService {
       customer = await this.customersService.create(tenant.id, {
         fullName: msg.displayName || `Zalo ${msg.from}`,
         phone: msg.from, // Zalo user_id luu tam vao truong phone de dinh danh duy nhat
+        source: CustomerSource.ZALO,
       });
       this.logger.log(`Tu dong tao khach hang moi tu Zalo: ${msg.from}`);
     }

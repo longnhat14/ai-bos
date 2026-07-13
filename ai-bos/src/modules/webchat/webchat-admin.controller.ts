@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import * as fs from 'fs';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { JwtPayload } from '../auth/jwt.strategy';
@@ -29,6 +31,24 @@ export class WebChatAdminController {
     const session = await this.aiChatService.findSession(user.tenantId, sessionId);
     const messages = await this.aiChatService.getHistory(sessionId);
     return { session, messages };
+  }
+
+  // Xem anh khach gui qua chat (chup tu camera) - CO XAC THUC, khac voi thu muc
+  // uploads/warehouse duoc serve tinh cong khai. Anh chat co the chua thong tin
+  // nhay cam (may khach, khong gian nha khach...) nen CHI nhan vien da dang nhap
+  // dung tenant moi xem duoc, khong public nhu logo/anh san pham.
+  @Get('sessions/:sessionId/messages/:messageId/image')
+  async getMessageImage(
+    @CurrentUser() user: JwtPayload,
+    @Param('messageId') messageId: string,
+    @Res() res: Response,
+  ) {
+    const message = await this.aiChatService.findMessage(user.tenantId, messageId);
+    if (!message.imagePath || !fs.existsSync(message.imagePath)) {
+      throw new NotFoundException('Khong tim thay anh');
+    }
+    res.setHeader('Content-Type', message.imageMimeType || 'image/jpeg');
+    fs.createReadStream(message.imagePath).pipe(res);
   }
 
   // "Gianh quyen" tu AI - AI se ngung tu dong tra loi trong phien nay
