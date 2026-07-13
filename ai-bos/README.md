@@ -974,6 +974,26 @@ ANTHROPIC_API_KEY=...
 # ... cac bien khac nhu .env.example
 ```
 
+### Sửa thông tin linh kiện đã tạo (mới bổ sung)
+
+Trước đây chỉ tạo mới + điều chỉnh số lượng được, **không sửa được tên/giá sau khi tạo**. Đã bổ sung:
+```bash
+curl -X PATCH http://localhost:3000/api/v1/warehouse/items/ITEM_ID -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"name":"Ten moi","sellPrice":250000}'
+```
+**Lưu ý:** SKU **không sửa được** (cố ý — SKU là định danh ổn định, đổi SKU có thể làm sai lệch dữ liệu đã tham chiếu trước đó như `TicketPart`). Chỉ `name`, `unit`, `lowStockThreshold`, `costPrice`, `sellPrice` sửa được. Chỉ Admin.
+
+### Tạo hóa đơn thủ công (mới bổ sung)
+
+**Lý do cần:** hóa đơn chỉ **tự động** sinh ra khi ticket đóng **và đã có `finalPrice`** (mặc định lấy từ `quotedPrice` khi đóng). Nếu ticket đi qua các bước trạng thái mà **chưa từng gọi `/quote`** để báo giá, `finalPrice` vẫn là `null` — hệ thống **cố ý không** tự tạo hóa đơn (tránh hóa đơn với giá `0` hoặc `null` gây nhầm lẫn), chỉ ghi log cảnh báo phía server.
+
+**Endpoint mới:**
+```bash
+curl -X POST http://localhost:3000/api/v1/invoices/manual/TICKET_ID -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" \
+  -d '{"finalPrice":500000}'
+```
+Chỉ Admin. Tự động đồng bộ lại `finalPrice` của ticket cho khớp với hóa đơn vừa tạo. Có sẵn cơ chế chống tạo trùng (nếu ticket đã có hóa đơn, trả về hóa đơn cũ thay vì tạo thêm).
+
 ## 4. Cấu trúc thư mục
 
 ```

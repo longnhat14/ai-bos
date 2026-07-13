@@ -6,6 +6,7 @@ import { join } from 'path';
 import { AttachmentsService } from './modules/tickets/attachments.service';
 import { SettingsController } from './modules/settings/settings.controller';
 import { WebChatController } from './modules/webchat/webchat.controller';
+import { WarehouseController } from './modules/warehouse/warehouse.controller';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -13,16 +14,21 @@ async function bootstrap() {
   fs.mkdirSync(AttachmentsService.getUploadDir(), { recursive: true });
   fs.mkdirSync(WebChatController.getUploadDir(), { recursive: true });
   fs.mkdirSync(SettingsController.getUploadDir(), { recursive: true });
+  fs.mkdirSync(WarehouseController.getImageUploadDir(), { recursive: true });
 
   // rawBody: true - can thiet de xac thuc chu ky webhook WhatsApp (X-Hub-Signature-256),
   // Meta ky chu ky dua tren RAW BYTES cua body, khong phai JSON da parse.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
 
-  // Serve CONG KHAI thu muc uploads/branding (logo thuong hieu) qua URL /uploads/branding/*.
-  // CHI thu muc nay duoc serve cong khai - cac thu muc khac (ticket attachments, webchat images)
-  // KHONG serve tinh, vi chua anh nhay cam (loi may, thong tin khach hang) khong nen public.
+  // Serve CONG KHAI thu muc uploads/branding (logo thuong hieu) va uploads/warehouse
+  // (anh san pham) qua URL - 2 thu muc nay KHONG chua du lieu nhay cam (khong phai
+  // anh loi may/thong tin khach hang), nen an toan de hien thi truc tiep <img src=...>
+  // tren Frontend. Cac thu muc khac (ticket attachments, webchat images) KHONG serve tinh.
   app.useStaticAssets(join(process.cwd(), 'uploads', 'branding'), {
     prefix: '/uploads/branding/',
+  });
+  app.useStaticAssets(join(process.cwd(), 'uploads', 'warehouse'), {
+    prefix: '/uploads/warehouse/',
   });
 
   app.useGlobalPipes(

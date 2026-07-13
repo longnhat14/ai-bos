@@ -27,4 +27,15 @@ export class InventoryItem extends TenantBaseEntity {
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
+
+  // So thang bao hanh cho linh kien nay (vd RAM bao hanh 36 thang) - null nghia
+  // la khong ap dung/chua khai bao. Khac voi Warranty module (bao hanh cho TICKET
+  // sua chua), day la bao hanh CUA NHA SAN XUAT/NHA CUNG CAP cho linh kien trong kho.
+  @Column({ name: 'warranty_months', type: 'int', nullable: true })
+  warrantyMonths: number | null;
+
+  // Link video gioi thieu/huong dan (vd video YouTube tu nha cung cap) - CHI 1
+  // link duy nhat, khac voi hinh anh co the nhieu (xem InventoryItemImage).
+  @Column({ name: 'video_url', type: 'varchar', nullable: true })
+  videoUrl: string | null;
 }

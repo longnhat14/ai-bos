@@ -21,4 +21,11 @@ export class PriceCatalog extends TenantBaseEntity {
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
+
+  // So thang bao hanh AP DUNG CHO DICH VU NAY - null nghia la KHONG bao hanh
+  // (vd dich vu "ve sinh may" thuong khong bao hanh, con "thay mainboard" co the
+  // bao hanh 3 thang). Khac voi Warranty module (tao 1 lan/ticket dua tren TICKET
+  // dong) - day la SO THANG MAC DINH de goi y khi tao Warranty cho dich vu tuong ung.
+  @Column({ name: 'warranty_months', type: 'int', nullable: true })
+  warrantyMonths: number | null;
 }

@@ -81,6 +81,16 @@ export class WarrantyService {
     return warranty;
   }
 
+  async findAll(tenantId: string): Promise<Warranty[]> {
+    return this.warrantyRepo.find({ where: { tenantId }, order: { createdAt: 'DESC' } });
+  }
+
+  async findOne(tenantId: string, id: string): Promise<Warranty> {
+    const warranty = await this.warrantyRepo.findOne({ where: { tenantId, id } });
+    if (!warranty) throw new NotFoundException('Khong tim thay bao hanh');
+    return warranty;
+  }
+
   async findByCustomer(tenantId: string, customerId: string): Promise<Warranty[]> {
     return this.warrantyRepo.find({
       where: { tenantId, customerId },

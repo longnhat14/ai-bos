@@ -3,8 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { EventType } from '../../common/event-bus/events';
-import { AdjustStockDto, CreateInventoryItemDto, UsePartForTicketDto } from './dto/warehouse.dto';
+import { AdjustStockDto, CreateInventoryItemDto, UpdateInventoryItemDto, UsePartForTicketDto } from './dto/warehouse.dto';
 import { InventoryItem } from './inventory-item.entity';
+import { InventoryItemImage } from './inventory-item-image.entity';
 import { TicketPart } from './ticket-part.entity';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class WarehouseService {
   constructor(
     @InjectRepository(InventoryItem) private readonly itemRepo: Repository<InventoryItem>,
     @InjectRepository(TicketPart) private readonly ticketPartRepo: Repository<TicketPart>,
+    @InjectRepository(InventoryItemImage) private readonly imageRepo: Repository<InventoryItemImage>,
     private readonly dataSource: DataSource,
     private readonly eventBus: EventBusService,
   ) {}
@@ -36,6 +38,15 @@ export class WarehouseService {
     const item = await this.itemRepo.findOne({ where: { tenantId, id } });
     if (!item) throw new NotFoundException('Khong tim thay linh kien trong kho');
     return item;
+  }
+
+  // SKU KHONG duoc sua sau khi tao - day la dinh danh on dinh, doi SKU co the lam
+  // sai lech du lieu da tham chieu truoc do (TicketPart, lich su su dung...).
+  // Ten/gia/nguong canh bao thi sua duoc binh thuong (thong tin hay thay doi thuc te).
+  async update(tenantId: string, id: string, dto: UpdateInventoryItemDto): Promise<InventoryItem> {
+    const item = await this.findOne(tenantId, id);
+    Object.assign(item, dto);
+    return this.itemRepo.save(item);
   }
 
   async findLowStock(tenantId: string): Promise<InventoryItem[]> {
@@ -142,5 +153,36 @@ export class WarehouseService {
 
   async getPartsByTicket(tenantId: string, ticketId: string): Promise<TicketPart[]> {
     return this.ticketPartRepo.find({ where: { tenantId, ticketId } });
+  }
+
+  // Anh minh hoa san pham - MOT linh kien co the co NHIEU anh (chup nhieu goc do,
+  // vd bao bi + san pham thuc te). Khac ban chat voi TicketAttachment (anh loi may).
+  async addImage(
+    tenantId: string,
+    inventoryItemId: string,
+    file: { originalname: string; path: string; mimetype: string },
+  ): Promise<InventoryItemImage> {
+    await this.findOne(tenantId, inventoryItemId); // dam bao san pham ton tai + dung tenant
+    const image = this.imageRepo.create({
+      tenantId,
+      inventoryItemId,
+      fileName: file.originalname,
+      filePath: file.path,
+      mimeType: file.mimetype,
+    });
+    return this.imageRepo.save(image);
+  }
+
+  async getImages(tenantId: string, inventoryItemId: string): Promise<InventoryItemImage[]> {
+    return this.imageRepo.find({
+      where: { tenantId, inventoryItemId },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async deleteImage(tenantId: string, inventoryItemId: string, imageId: string): Promise<void> {
+    const image = await this.imageRepo.findOne({ where: { tenantId, inventoryItemId, id: imageId } });
+    if (!image) throw new NotFoundException('Khong tim thay anh');
+    await this.imageRepo.remove(image);
   }
 }

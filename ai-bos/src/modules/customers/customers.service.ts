@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventBusService } from '../../common/event-bus/event-bus.service';
@@ -46,6 +46,19 @@ export class CustomersService {
 
   async update(tenantId: string, id: string, dto: UpdateCustomerDto): Promise<Customer> {
     const customer = await this.findOne(tenantId, id);
+
+    // Neu doi SDT, kiem tra trung voi khach hang KHAC (khong tinh chinh no) - tranh
+    // vi pham unique constraint (tenantId, phone) va bao loi ro rang thay vi de
+    // TypeORM nem loi SQL kho hieu ra ngoai.
+    if (dto.phone && dto.phone !== customer.phone) {
+      const existing = await this.customerRepo.findOne({ where: { tenantId, phone: dto.phone } });
+      if (existing) {
+        throw new ConflictException(
+          `Số điện thoại "${dto.phone}" đã được dùng bởi khách hàng "${existing.fullName}".`,
+        );
+      }
+    }
+
     Object.assign(customer, dto);
     return this.customerRepo.save(customer);
   }

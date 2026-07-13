@@ -26,6 +26,44 @@ export class CreateInventoryItemDto {
   @IsNumber()
   @Min(0)
   sellPrice: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  warrantyMonths?: number;
+
+  @IsOptional()
+  videoUrl?: string;
+}
+
+export class UpdateInventoryItemDto {
+  @IsOptional()
+  name?: string;
+
+  @IsOptional()
+  unit?: string;
+
+  @IsOptional()
+  @IsInt()
+  lowStockThreshold?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  costPrice?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  sellPrice?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  warrantyMonths?: number;
+
+  @IsOptional()
+  videoUrl?: string;
 }
 
 export class AdjustStockDto {

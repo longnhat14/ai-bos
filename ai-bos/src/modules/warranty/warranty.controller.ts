@@ -35,6 +35,19 @@ export class WarrantyController {
     return this.warrantyService.checkActive(user.tenantId, ticketId);
   }
 
+  @Get()
+  findAll(@CurrentUser() user: JwtPayload) {
+    return this.warrantyService.findAll(user.tenantId);
+  }
+
+  // Dat SAU cac route tinh (by-ticket, by-customer, check) de tranh ':id' "nuot"
+  // nham cac path do - NestJS/Express khop theo THU TU dang ky, route cang cu
+  // the (khong co tham so) can dang ky truoc route co tham so o cung vi tri.
+  @Get(':id')
+  findOne(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.warrantyService.findOne(user.tenantId, id);
+  }
+
   // Chi Admin duoc HUY bao hanh - day la hanh dong co hau qua ve tai chinh/phap ly
   // voi khach hang, KHONG the de Technician tu y thuc hien.
   @Patch(':id/void')

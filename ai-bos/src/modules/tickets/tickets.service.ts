@@ -116,6 +116,18 @@ export class TicketsService {
     return ticket;
   }
 
+  /**
+   * Ghi lai gia cuoi cung THAT SU cua ticket - dung boi InvoiceController khi
+   * Admin tao hoa don thu cong (vd ticket dong ma chua tung bao gia nen khong
+   * tu dong sinh hoa don duoc). KHONG doi trang thai/khong kiem tra transition,
+   * chi cap nhat gia tri de dong bo voi hoa don vua tao thu cong.
+   */
+  async setFinalPrice(tenantId: string, id: string, finalPrice: number): Promise<Ticket> {
+    const ticket = await this.findOne(tenantId, id);
+    ticket.finalPrice = finalPrice;
+    return this.ticketRepo.save(ticket);
+  }
+
   async updateStatus(
     tenantId: string,
     id: string,

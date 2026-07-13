@@ -31,6 +31,9 @@ export class UpdateCustomerDto {
   fullName?: string;
 
   @IsOptional()
+  phone?: string;
+
+  @IsOptional()
   email?: string;
 
   @IsOptional()

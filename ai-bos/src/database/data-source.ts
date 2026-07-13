@@ -8,6 +8,7 @@ import { Ticket } from '../modules/tickets/ticket.entity';
 import { TicketStatusHistory } from '../modules/tickets/ticket-status-history.entity';
 import { TicketAttachment } from '../modules/tickets/ticket-attachment.entity';
 import { InventoryItem } from '../modules/warehouse/inventory-item.entity';
+import { InventoryItemImage } from '../modules/warehouse/inventory-item-image.entity';
 import { TicketPart } from '../modules/warehouse/ticket-part.entity';
 import { Invoice } from '../modules/invoice/invoice.entity';
 import { Warranty } from '../modules/warranty/warranty.entity';
@@ -48,6 +49,7 @@ export const AppDataSource = new DataSource({
     TicketStatusHistory,
     TicketAttachment,
     InventoryItem,
+    InventoryItemImage,
     TicketPart,
     Invoice,
     Warranty,
