@@ -1,14 +1,10 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
 import { Repository } from 'typeorm';
-import { User, UserRole } from '../users/user.entity';
-import { LoginDto, RegisterDto } from './dto/auth.dto';
-
-// Trong Sprint 1, tam thoi hard-code tenant mac dinh la PCTech.
-// Sang Giai doan 4 (multi-tenant), tenantId se lay theo subdomain/header thay vi hard-code.
-const DEFAULT_TENANT_CODE = 'pctech';
+import { User } from '../users/user.entity';
+import { LoginDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -16,26 +12,6 @@ export class AuthService {
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     private readonly jwtService: JwtService,
   ) {}
-
-  async register(dto: RegisterDto, tenantId: string) {
-    const existing = await this.userRepo.findOne({ where: { email: dto.email, tenantId } });
-    if (existing) {
-      throw new ConflictException('Email da duoc su dung trong tenant nay');
-    }
-
-    const passwordHash = await bcrypt.hash(dto.password, 10);
-    const user = this.userRepo.create({
-      tenantId,
-      email: dto.email,
-      passwordHash,
-      fullName: dto.fullName,
-      role: dto.role ?? UserRole.TECHNICIAN,
-      phone: dto.phone,
-    });
-    await this.userRepo.save(user);
-
-    return this.buildAuthResponse(user);
-  }
 
   async login(dto: LoginDto, tenantId: string) {
     const user = await this.userRepo.findOne({ where: { email: dto.email, tenantId } });

@@ -5,6 +5,7 @@ export enum CustomerSource {
   WEBSITE = 'website', // AI Chat Website tu tao khi khach chat va xac nhan tao ticket
   WHATSAPP = 'whatsapp',
   ZALO = 'zalo',
+  MESSENGER = 'messenger', // Facebook Messenger
   COUNTER = 'counter', // nhan vien tu tay tao (khach den truc tiep, goi dien...) - MAC DINH
 }
 

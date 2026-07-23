@@ -10,6 +10,7 @@ export enum ConversationChannel {
   INTERNAL = 'internal', // mo phong qua API, chua gan kenh that (dung khi test truoc day)
   WHATSAPP = 'whatsapp',
   ZALO = 'zalo', // khach hang Viet Nam (chu yeu PCTech)
+  MESSENGER = 'messenger', // Facebook Messenger - pho bien voi ca 2 tenant, mac dinh PCTech
 }
 
 @Entity('conversations')

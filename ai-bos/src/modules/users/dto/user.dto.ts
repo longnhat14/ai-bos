@@ -1,5 +1,27 @@
-import { IsArray, IsBoolean, IsInt, IsNotEmpty, IsOptional, Max, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, Max, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { UserRole } from '../user.entity';
+
+// Tao tai khoan nhan vien MOI - CHI Admin duoc goi (xem UsersController).
+// Khac han "RegisterDto" cu (da bi XOA vi la lo hong bao mat nghiem trong -
+// bat ky ai cung tu dang ky duoc va tu chon role=admin). Endpoint nay BAT BUOC
+// phai chon role ro rang, khong cho mac dinh ngam de tranh nham lan.
+export class CreateEmployeeDto {
+  @IsEmail()
+  email: string;
+
+  @MinLength(6)
+  password: string;
+
+  @IsNotEmpty()
+  fullName: string;
+
+  @IsEnum(UserRole)
+  role: UserRole;
+
+  @IsOptional()
+  phone?: string;
+}
 
 export class SkillInputDto {
   @IsNotEmpty()

@@ -1,12 +1,42 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import * as bcrypt from 'bcryptjs';
 import { Repository } from 'typeorm';
-import { UpdateTechnicianProfileDto } from './dto/user.dto';
+import { CreateEmployeeDto, UpdateTechnicianProfileDto } from './dto/user.dto';
 import { User, UserRole } from './user.entity';
 
 @Injectable()
 export class UsersService {
   constructor(@InjectRepository(User) private readonly userRepo: Repository<User>) {}
+
+  /**
+   * Tao tai khoan nhan vien moi - THAY THE hoan toan cho AuthService.register()
+   * cu (da bi XOA vi la lo hong bao mat: cong khai, ai cung tu chon duoc role=admin).
+   * Endpoint goi ham nay BAT BUOC qua RolesGuard(ADMIN) - xem UsersController.
+   * KHONG tra ve accessToken (khac dang nhap that su) - day la Admin TAO tai
+   * khoan cho NGUOI KHAC, khong phai nguoi do tu dang nhap.
+   */
+  async createEmployee(tenantId: string, dto: CreateEmployeeDto): Promise<User> {
+    const existing = await this.userRepo.findOne({ where: { tenantId, email: dto.email } });
+    if (existing) {
+      throw new ConflictException('Email da duoc su dung trong tenant nay');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const user = this.userRepo.create({
+      tenantId,
+      email: dto.email,
+      passwordHash,
+      fullName: dto.fullName,
+      role: dto.role,
+      phone: dto.phone,
+    });
+    return this.userRepo.save(user);
+  }
+
+  async findAll(tenantId: string): Promise<User[]> {
+    return this.userRepo.find({ where: { tenantId }, order: { createdAt: 'DESC' } });
+  }
 
   async findTechnicians(tenantId: string): Promise<User[]> {
     return this.userRepo.find({

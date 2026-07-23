@@ -47,6 +47,8 @@ import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 import { ZaloModule } from './modules/zalo/zalo.module';
+import { MessengerModule } from './modules/messenger/messenger.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { HealthModule } from './modules/health/health.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
 import { WebChatModule } from './modules/webchat/webchat.module';
@@ -135,6 +137,8 @@ import { EventDispatcherProcessor } from './common/event-bus/event-dispatcher.pr
     SalesModule,
     WhatsAppModule,
     ZaloModule,
+    MessengerModule,
+    ReportsModule,
     HealthModule,
     TelegramModule,
     WebChatModule,

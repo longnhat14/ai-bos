@@ -994,6 +994,75 @@ curl -X POST http://localhost:3000/api/v1/invoices/manual/TICKET_ID -H "Content-
 ```
 Chỉ Admin. Tự động đồng bộ lại `finalPrice` của ticket cho khớp với hóa đơn vừa tạo. Có sẵn cơ chế chống tạo trùng (nếu ticket đã có hóa đơn, trả về hóa đơn cũ thay vì tạo thêm).
 
+### Cài đặt Facebook Messenger
+
+Dùng chung ha tang Meta voi WhatsApp, nen co che xac thuc webhook giong het (chu ky `X-Hub-Signature-256`).
+
+**Bước 1 — Tạo Facebook App + kết nối Page:**
+1. Vào https://developers.facebook.com, tạo App mới, thêm sản phẩm "Messenger"
+2. Kết nối 1 Facebook Page cụ thể, lấy **Page Access Token**
+3. Lấy **App Secret** trong phần Cài đặt ứng dụng
+
+**Bước 2 — Cấu hình `.env`:**
+```
+MESSENGER_PAGE_ACCESS_TOKEN=<page_access_token>
+MESSENGER_APP_SECRET=<app_secret>
+MESSENGER_WEBHOOK_VERIFY_TOKEN=<tu chon chuoi bat ky>
+MESSENGER_TENANT_CODE=pctech
+```
+
+**Bước 3 — Đăng ký Webhook URL** trong Messenger Settings của App:
+```
+https://xxxx.ngrok-free.app/webhooks/messenger
+```
+Verify Token phải khớp đúng `MESSENGER_WEBHOOK_VERIFY_TOKEN`. Đăng ký nhận sự kiện `messages`.
+
+**Bước 4 — Test bằng cách nhắn tin thật vào Facebook Page** — dùng chung toàn bộ cơ chế đã có (Telegram bridge `/claim`, `/s <số>`, cảnh báo 15s, hộp thư chung `/webchat` ở Frontend). Mặc định **KHÔNG dịch tự động** (giống Zalo, giả định khách Việt Nam) — có thể bật riêng qua `enableAutoTranslate` nếu gặp khách nước ngoài.
+
+## 3.7. QUAN TRỌNG — Đã vá lỗ hổng bảo mật nghiêm trọng
+
+**Đã phát hiện và sửa:** endpoint `POST /api/v1/auth/register` trước đây **hoàn toàn công khai** (không cần đăng nhập) và cho phép người gọi **tự chọn `role: "admin"`**. Điều này có nghĩa **bất kỳ ai trên internet** biết được `tenantCode` (vd `"pctech"`) đều có thể tự tạo tài khoản Admin đầy đủ quyền.
+
+**Đã sửa:**
+- **Xóa hẳn** endpoint `POST /auth/register` công khai
+- Thay bằng `POST /api/v1/users` — **chỉ Admin đã đăng nhập** mới tạo được tài khoản nhân viên mới (Admin hoặc Technician)
+- Thêm `GET /api/v1/users` — xem danh sách toàn bộ nhân viên (chỉ Admin)
+
+**⚠️ Việc cần làm ngay:** nếu bạn từng dùng `/auth/register` để test (rất có thể — đã dùng suốt quá trình phát triển), **hãy kiểm tra xem có tài khoản lạ nào không mong muốn không**:
+```bash
+docker exec -it ai-bos-mariadb mariadb -u ai_bos -p ai_bos
+```
+```sql
+SELECT email, full_name, role, created_at FROM users ORDER BY created_at;
+```
+Xóa mọi tài khoản bạn không nhận ra hoặc không cần dùng.
+
+**Từ giờ về sau:** tạo nhân viên mới **chỉ qua giao diện** — đăng nhập Admin → menu "Nhân viên" → "Thêm nhân viên".
+
+## 3.8. Kiểm thử tự động (mới bổ sung)
+
+Đã thiết lập Jest + viết **35 test thật** cho các logic nghiệp vụ quan trọng/rủi ro cao nhất — không phải test hình thức, mỗi test đều mô phỏng đúng tình huống **đã từng gây lỗi thật** trong quá trình phát triển:
+
+| File test | Bao phủ |
+|---|---|
+| `roles.guard.spec.ts` | Chặn Technician khỏi endpoint Admin — vừa test lại logic đã kiểm chứng khi vá bảo mật |
+| `tickets.service.spec.ts` | Quy tắc chuyển trạng thái ticket, tự động lấy `finalPrice` khi đóng |
+| `pricing.service.spec.ts` | Chuẩn hóa so khớp tên dịch vụ (hoa/thường/khoảng trắng) — đúng lỗi đã gặp |
+| `customers.service.spec.ts` | Chặn trùng SĐT khi sửa — đúng lỗi đã gặp |
+| `warranty.service.spec.ts` | Tính số ngày còn lại bảo hành theo thời gian thực |
+| `users.service.spec.ts` | Tạo nhân viên — băm mật khẩu, chặn trùng email, giữ đúng vai trò đã chọn (phần vá bảo mật quan trọng nhất) |
+
+**Chạy test:**
+```bash
+npm test              # chạy 1 lần
+npm run test:watch    # tự chạy lại khi sửa code
+npm run test:cov      # kèm báo cáo % code được test
+```
+
+**Đã xác nhận:** file test **không** bị lẫn vào bản build production (`tsconfig.json` đã loại trừ `*.spec.ts`).
+
+**Việc còn thiếu (sẽ làm dần theo thời gian):** test cho các service còn lại (Dispatcher, Diagnostic, Invoice, Shop, Warehouse...), và test e2e (gọi API thật qua HTTP thay vì mock).
+
 ## 4. Cấu trúc thư mục
 
 ```

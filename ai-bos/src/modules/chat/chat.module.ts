@@ -7,6 +7,7 @@ import { TelegramModule } from '../telegram/telegram.module';
 import { TenantsModule } from '../tenants/tenants.module';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 import { ZaloModule } from '../zalo/zalo.module';
+import { MessengerModule } from '../messenger/messenger.module';
 import { ChatMessage } from './chat-message.entity';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
@@ -22,6 +23,7 @@ import { TranslationService } from './translation.service';
     forwardRef(() => WhatsAppModule),
     forwardRef(() => TelegramModule),
     forwardRef(() => ZaloModule),
+    forwardRef(() => MessengerModule),
   ],
   controllers: [ChatController],
   providers: [ChatService, TranslationService],

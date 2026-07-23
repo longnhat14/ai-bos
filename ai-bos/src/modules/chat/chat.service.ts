@@ -10,6 +10,7 @@ import { TelegramChannel } from '../telegram/telegram-channel.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { WhatsAppChannel } from '../whatsapp/whatsapp-channel.service';
 import { ZaloChannel } from '../zalo/zalo-channel.service';
+import { MessengerChannel } from '../messenger/messenger-channel.service';
 import { ChatMessage, SenderType } from './chat-message.entity';
 import { Conversation, ConversationChannel } from './conversation.entity';
 import { CreateConversationDto, SendMessageDto } from './dto/chat.dto';
@@ -19,6 +20,19 @@ import { TranslationService } from './translation.service';
 // "Mac dinh BAT cho RemoteIT, mac dinh TAT cho PCTech - nhung co the bat rieng tung conversation"
 const AUTO_TRANSLATE_TENANT_CODE = 'remoteit';
 const ESCALATION_DELAY_MS = 15000; // dung chung 15s voi WebChat, xem webchat-escalation.processor.ts
+
+/** Ten hien thi cho kenh ngoai - dung chung, tranh lap ternary nhieu nhanh o nhieu noi. */
+function getChannelDisplayLabel(channel: ConversationChannel): string {
+  switch (channel) {
+    case ConversationChannel.ZALO:
+      return 'Zalo';
+    case ConversationChannel.MESSENGER:
+      return 'Messenger';
+    case ConversationChannel.WHATSAPP:
+    default:
+      return 'WhatsApp';
+  }
+}
 
 @Injectable()
 export class ChatService {
@@ -33,6 +47,7 @@ export class ChatService {
     private readonly translationService: TranslationService,
     @Inject(forwardRef(() => WhatsAppChannel)) private readonly whatsAppChannel: WhatsAppChannel,
     @Inject(forwardRef(() => ZaloChannel)) private readonly zaloChannel: ZaloChannel,
+    @Inject(forwardRef(() => MessengerChannel)) private readonly messengerChannel: MessengerChannel,
     @Inject(forwardRef(() => TelegramChannel)) private readonly telegramChannel: TelegramChannel,
     private readonly eventBus: EventBusService,
   ) {}
@@ -129,6 +144,38 @@ export class ChatService {
     return this.conversationRepo.save(conversation);
   }
 
+  /**
+   * Dung boi MessengerWebhookController - tuong tu Zalo (mac dinh PCTech, khong
+   * dich tu dong vi gia dinh khach Viet Nam) - co the bat rieng qua enableAutoTranslate
+   * neu PCTech gap khach nuoc ngoai nhan tin qua Facebook Page.
+   */
+  async findOrCreateForMessenger(
+    tenantId: string,
+    customerId: string,
+    messengerPsid: string,
+  ): Promise<Conversation> {
+    const existing = await this.conversationRepo.findOne({
+      where: {
+        tenantId,
+        customerId,
+        channel: ConversationChannel.MESSENGER,
+        externalContactId: messengerPsid,
+      },
+    });
+    if (existing) return existing;
+
+    const conversation = this.conversationRepo.create({
+      tenantId,
+      customerId,
+      customerLanguage: 'vi',
+      staffLanguage: 'vi',
+      autoTranslateEnabled: false,
+      channel: ConversationChannel.MESSENGER,
+      externalContactId: messengerPsid,
+    });
+    return this.conversationRepo.save(conversation);
+  }
+
   async findConversation(tenantId: string, id: string): Promise<Conversation> {
     const conversation = await this.conversationRepo.findOne({ where: { tenantId, id } });
     if (!conversation) throw new NotFoundException('Khong tim thay cuoc hoi thoai');
@@ -148,6 +195,7 @@ export class ChatService {
       where: [
         { tenantId, channel: ConversationChannel.WHATSAPP },
         { tenantId, channel: ConversationChannel.ZALO },
+        { tenantId, channel: ConversationChannel.MESSENGER },
       ],
     });
     const matched = candidates.find((c) => c.id.startsWith(shortId) && !c.assignedStaffId);
@@ -251,7 +299,7 @@ export class ChatService {
       senderType: dto.senderType,
     });
 
-    // Neu la tin nhan cua staff tren 1 cuoc hoi thoai kenh ngoai (WhatsApp/Zalo) -> gui THAT ra ngoai cho khach
+    // Neu la tin nhan cua staff tren 1 cuoc hoi thoai kenh ngoai (WhatsApp/Zalo/Messenger) -> gui THAT ra ngoai cho khach
     if (!isFromCustomer && conversation.externalContactId) {
       if (conversation.channel === ConversationChannel.WHATSAPP) {
         await this.whatsAppChannel.send(
@@ -263,14 +311,20 @@ export class ChatService {
           { externalId: conversation.externalContactId },
           { text: translatedText },
         );
+      } else if (conversation.channel === ConversationChannel.MESSENGER) {
+        await this.messengerChannel.send(
+          { externalId: conversation.externalContactId },
+          { text: translatedText },
+        );
       }
     }
 
-    // Canh bao qua Telegram khi khach nhan tin (CHI ap dung kenh ben ngoai - WhatsApp/Zalo -
+    // Canh bao qua Telegram khi khach nhan tin (CHI ap dung kenh ben ngoai - WhatsApp/Zalo/Messenger -
     // vi cac kenh nay khong co AI tu tra loi nhu WebChat, nen luon can nguoi that xu ly):
     const isExternalChannel =
       conversation.channel === ConversationChannel.WHATSAPP ||
-      conversation.channel === ConversationChannel.ZALO;
+      conversation.channel === ConversationChannel.ZALO ||
+      conversation.channel === ConversationChannel.MESSENGER;
 
     if (isFromCustomer && isExternalChannel) {
       if (!conversation.assignedStaffId) {
@@ -283,7 +337,7 @@ export class ChatService {
           'check-response',
           {
             entityType: 'whatsapp', // dung chung nhan nay cho ca WhatsApp va Zalo - xem ghi chu trong webchat-escalation.processor.ts
-            channelLabel: conversation.channel === ConversationChannel.ZALO ? 'Zalo' : 'WhatsApp',
+            channelLabel: getChannelDisplayLabel(conversation.channel),
             tenantId,
             sessionId: conversationId,
             customerMessageId: message.id,
@@ -309,7 +363,7 @@ export class ChatService {
       return;
     }
 
-    const channelLabel = conversation.channel === ConversationChannel.ZALO ? 'Zalo' : 'WhatsApp';
+    const channelLabel = getChannelDisplayLabel(conversation.channel);
     const shortId = conversation.id.slice(0, 8);
     const alertText =
       `📲 <b>Khách ${channelLabel} mới nhắn, chưa ai nhận xử lý!</b>\n\n` +
@@ -337,7 +391,7 @@ export class ChatService {
   // chi thay cua rieng minh).
   async findAllConversations(tenantId: string): Promise<Conversation[]> {
     return this.conversationRepo.find({
-      where: { tenantId, channel: In([ConversationChannel.WHATSAPP, ConversationChannel.ZALO]) },
+      where: { tenantId, channel: In([ConversationChannel.WHATSAPP, ConversationChannel.ZALO, ConversationChannel.MESSENGER]) },
       order: { updatedAt: 'DESC' },
     });
   }

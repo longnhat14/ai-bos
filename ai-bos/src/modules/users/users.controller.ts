@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtPayload } from '../auth/jwt.strategy';
-import { UpdateTechnicianProfileDto } from './dto/user.dto';
+import { CreateEmployeeDto, UpdateTechnicianProfileDto } from './dto/user.dto';
 import { UserRole } from './user.entity';
 import { UsersService } from './users.service';
 
@@ -12,6 +12,23 @@ import { UsersService } from './users.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  // Tao tai khoan nhan vien moi (Admin hoac Technician) - CHI Admin duoc goi.
+  // Day la endpoint DUY NHAT con lai de tao tai khoan trong he thong - thay
+  // the hoan toan cho POST /auth/register cu (da XOA vi la lo hong bao mat).
+  @Post()
+  @Roles(UserRole.ADMIN)
+  createEmployee(@CurrentUser() user: JwtPayload, @Body() dto: CreateEmployeeDto) {
+    return this.usersService.createEmployee(user.tenantId, dto);
+  }
+
+  // Danh sach TOAN BO nhan vien (ca Admin lan Technician) - dung cho trang
+  // quan ly nhan vien o Frontend. CHI Admin xem duoc (giong logic tai chinh khac).
+  @Get()
+  @Roles(UserRole.ADMIN)
+  findAll(@CurrentUser() user: JwtPayload) {
+    return this.usersService.findAll(user.tenantId);
+  }
 
   @Get('technicians')
   findTechnicians(@CurrentUser() user: JwtPayload) {
